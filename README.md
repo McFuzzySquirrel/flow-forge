@@ -51,6 +51,9 @@ node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment -
 3. **No hardcoded agents** — all behaviour comes from packages; the platform installs empty.
 4. **Audit is runtime-enforced** — an agent step cannot run without emitting an audit record.
 
+The reasoning behind these and other foundational decisions is captured as Architecture Decision
+Records in [docs/adr/](docs/adr/README.md).
+
 ## Roadmap
 
 The detailed, task-level plan for the next phases — including "learn while you build" notes on the
