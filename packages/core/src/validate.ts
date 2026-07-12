@@ -23,8 +23,13 @@ const SCHEMA_NAMES: SchemaName[] = [
 const schemasDir = fileURLToPath(new URL('../schemas/', import.meta.url));
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
-const applyFormats = (addFormats as { default?: (a: Ajv2020) => void }).default ?? (addFormats as unknown as (a: Ajv2020) => void);
-applyFormats(ajv);
+
+/** ajv-formats ships CJS; depending on the loader it may appear as the function itself or as { default }. */
+function getFormatApplier(): (a: Ajv2020) => void {
+  const candidate = addFormats as { default?: (a: Ajv2020) => void } | ((a: Ajv2020) => void);
+  return typeof candidate === 'function' ? candidate : (candidate.default as (a: Ajv2020) => void);
+}
+getFormatApplier()(ajv);
 
 const validators = new Map<SchemaName, ValidateFunction>();
 

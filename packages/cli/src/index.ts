@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
 import { AuditLog } from '@flowforge/audit';
 import { MemoryService } from '@flowforge/memory';
@@ -109,7 +111,15 @@ export async function runCommand(
 }
 
 const [, , command, ...args] = process.argv;
-if (process.argv[1] && /flowforge|cli\/dist\/index\.js$/.test(process.argv[1])) {
+const isDirectRun = (() => {
+  if (!process.argv[1]) return false;
+  try {
+    return import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
+  } catch {
+    return false;
+  }
+})();
+if (isDirectRun) {
   switch (command) {
     case 'validate':
       process.exit(args[0] ? validateCommand(args[0]) : (usage(), 1));

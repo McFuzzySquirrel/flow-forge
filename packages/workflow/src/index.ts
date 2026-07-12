@@ -48,11 +48,19 @@ export class InMemoryStateStore implements StateStore {
 }
 
 /** Evaluates simple branch conditions like "score >= 50" or "default" over state. */
+const OPERATORS = ['>=', '<=', '==', '!=', '>', '<'] as const;
+
 export function evaluateCondition(expression: string, state: Record<string, unknown>): boolean {
   if (expression === 'default') return true;
-  const match = expression.match(/^\s*([a-zA-Z_][\w.]*)\s*(==|!=|>=|<=|>|<)\s*(.+?)\s*$/);
-  if (!match) throw new Error(`Unsupported condition expression: '${expression}'`);
-  const [, path, operator, rawValue] = match as unknown as [string, string, string, string];
+  const trimmed = expression.trim();
+  const operator = OPERATORS.find((op) => trimmed.includes(op));
+  if (!operator) throw new Error(`Unsupported condition expression: '${expression}'`);
+  const index = trimmed.indexOf(operator);
+  const path = trimmed.slice(0, index).trim();
+  const rawValue = trimmed.slice(index + operator.length).trim();
+  if (!/^[a-zA-Z_][\w.]*$/.test(path) || rawValue.length === 0) {
+    throw new Error(`Unsupported condition expression: '${expression}'`);
+  }
   let left: unknown = state;
   for (const key of path.split('.')) {
     left = (left as Record<string, unknown> | undefined)?.[key];
