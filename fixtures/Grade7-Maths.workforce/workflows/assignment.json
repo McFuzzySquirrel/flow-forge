@@ -1,0 +1,89 @@
+{
+  "id": "assignment",
+  "name": "Assignment Lifecycle",
+  "description": "Teacher creates assignment → Planner plans → Student submits → Assessment marks → Feedback written → Teacher consistency check → Human teacher approval.",
+  "start": "create-assignment",
+  "state": {
+    "assignment": null,
+    "plan": null,
+    "submission": null,
+    "assessment": null,
+    "feedback": null,
+    "consistency": null,
+    "retries": 0
+  },
+  "nodes": [
+    {
+      "id": "create-assignment",
+      "type": "humanInput",
+      "role": "teacher",
+      "prompt": "Describe the assignment brief.",
+      "output": "assignment",
+      "next": "plan"
+    },
+    {
+      "id": "plan",
+      "type": "agent",
+      "agent": "planner",
+      "action": "Break the assignment into a sequenced learning plan.",
+      "inputs": ["assignment"],
+      "output": "plan",
+      "retry": { "maxAttempts": 2 },
+      "next": "check-curriculum"
+    },
+    {
+      "id": "check-curriculum",
+      "type": "agent",
+      "agent": "curriculum",
+      "action": "Verify the plan aligns with the Grade 7 syllabus.",
+      "inputs": ["plan"],
+      "output": "curriculumCheck",
+      "next": "student-work"
+    },
+    {
+      "id": "student-work",
+      "type": "humanInput",
+      "role": "student",
+      "prompt": "Complete the tasks in your plan and submit your work.",
+      "output": "submission",
+      "next": "assess"
+    },
+    {
+      "id": "assess",
+      "type": "agent",
+      "agent": "assessment",
+      "action": "Mark the submission against the rubric with evidence.",
+      "inputs": ["assignment", "submission"],
+      "output": "assessment",
+      "retry": { "maxAttempts": 2 },
+      "next": "write-feedback"
+    },
+    {
+      "id": "write-feedback",
+      "type": "agent",
+      "agent": "feedback",
+      "action": "Write constructive feedback based on the assessment.",
+      "inputs": ["assessment", "submission"],
+      "output": "feedback",
+      "next": "consistency-check"
+    },
+    {
+      "id": "consistency-check",
+      "type": "agent",
+      "agent": "teacher",
+      "action": "Check assessment and feedback for consistency.",
+      "inputs": ["assessment", "feedback"],
+      "output": "consistency",
+      "next": "teacher-approval"
+    },
+    {
+      "id": "teacher-approval",
+      "type": "humanApproval",
+      "role": "teacher",
+      "subject": "assessment",
+      "onApprove": "done",
+      "onReject": "assess"
+    },
+    { "id": "done", "type": "end" }
+  ]
+}

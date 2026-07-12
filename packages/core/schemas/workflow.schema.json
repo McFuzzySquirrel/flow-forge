@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/workflow.schema.json",
+  "title": "Workflow Definition",
+  "description": "Declarative workflow spec. Portable across runners (embedded in-process runner, Dapr Workflows runner). Nodes include agent steps, human-approval steps, retries, branches and parallel groups. Human-in-the-loop is a first-class node type.",
+  "type": "object",
+  "required": ["id", "name", "start", "nodes"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "start": {
+      "type": "string",
+      "description": "Id of the first node to execute."
+    },
+    "state": {
+      "type": "object",
+      "description": "Declared workflow state variables with initial values. State is transactional workflow data — distinct from agent memory.",
+      "additionalProperties": true
+    },
+    "deadline": {
+      "type": "string",
+      "description": "Optional ISO 8601 duration for the whole workflow, e.g. 'P7D'."
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/node" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["id", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["agent", "humanApproval", "humanInput", "branch", "parallel", "end"]
+        },
+        "next": {
+          "type": "string",
+          "description": "Id of the next node (not used by branch/end)."
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "agent" } } },
+          "then": {
+            "required": ["agent", "action"],
+            "properties": {
+              "agent": { "type": "string", "description": "Agent id from the package." },
+              "action": { "type": "string", "description": "Instruction describing what the agent must do in this step." },
+              "persona": { "type": "string", "description": "Persona id overriding the agent's default." },
+              "inputs": {
+                "type": "array",
+                "description": "State variable names passed to the agent as context.",
+                "items": { "type": "string" }
+              },
+              "output": { "type": "string", "description": "State variable to store the agent's output in." },
+              "retry": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "maxAttempts": { "type": "integer", "minimum": 1, "default": 1 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "humanApproval" } } },
+          "then": {
+            "required": ["role"],
+            "properties": {
+              "role": { "type": "string", "description": "Human role required to approve, e.g. 'teacher'." },
+              "subject": { "type": "string", "description": "State variable holding the item under review." },
+              "onApprove": { "type": "string", "description": "Next node id when approved (defaults to 'next')." },
+              "onReject": { "type": "string", "description": "Next node id when rejected." }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "humanInput" } } },
+          "then": {
+            "required": ["role", "output"],
+            "properties": {
+              "role": { "type": "string", "description": "Human role providing input, e.g. 'student'." },
+              "prompt": { "type": "string", "description": "What the human is asked to provide." },
+              "output": { "type": "string", "description": "State variable to store the input in." }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "branch" } } },
+          "then": {
+            "required": ["conditions"],
+            "properties": {
+              "conditions": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": ["when", "next"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "when": { "type": "string", "description": "Expression over state, e.g. 'score >= 50' or 'default'." },
+                    "next": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "parallel" } } },
+          "then": {
+            "required": ["branches"],
+            "properties": {
+              "branches": {
+                "type": "array",
+                "minItems": 2,
+                "items": { "type": "string", "description": "Node id starting each parallel branch." }
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

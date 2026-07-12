@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/agent.schema.json",
+  "title": "Agent Definition",
+  "description": "Defines a digital specialist: its role, skills, tools, model requirements, memory namespace and permissions. Capability lives here; interaction style lives in personas.",
+  "type": "object",
+  "required": ["id", "name", "role", "model"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Package-unique agent identifier, e.g. 'planner', 'assessment'."
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "role": {
+      "type": "string",
+      "description": "One-sentence description of this agent's job.",
+      "minLength": 1
+    },
+    "systemPrompt": {
+      "type": "string",
+      "description": "Relative path to the agent's base system prompt file."
+    },
+    "skills": {
+      "type": "array",
+      "description": "Skill ids (from the package) this agent is equipped with.",
+      "items": { "type": "string" }
+    },
+    "tools": {
+      "type": "array",
+      "description": "Tool ids this agent may invoke.",
+      "items": { "type": "string" }
+    },
+    "defaultPersona": {
+      "type": "string",
+      "description": "Persona id applied unless overridden by configuration."
+    },
+    "model": {
+      "type": "object",
+      "description": "Model requirements; the platform maps these to an available provider.",
+      "required": ["tier"],
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "type": "string",
+          "enum": ["small", "medium", "large"],
+          "description": "Capability tier required. 'small' may run on a local model; 'large' implies a frontier model."
+        },
+        "preferredProvider": {
+          "type": "string",
+          "description": "Optional provider hint, e.g. 'ollama', 'openai-compatible'."
+        },
+        "preferredModel": { "type": "string" },
+        "temperature": { "type": "number", "minimum": 0, "maximum": 2 }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean", "default": true },
+        "namespace": {
+          "type": "string",
+          "description": "Memory collection namespace; defaults to '<packageId>/<agentId>'."
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "description": "What this agent is allowed to see and do. Enforced by the runtime.",
+      "additionalProperties": false,
+      "properties": {
+        "canSeeRubricAnswers": { "type": "boolean", "default": false },
+        "canGrade": { "type": "boolean", "default": false },
+        "canAccessLearnerHistory": { "type": "boolean", "default": false },
+        "network": { "type": "boolean", "default": false }
+      }
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "Optional JSON Schema the agent's structured output must satisfy."
+    }
+  }
+}
