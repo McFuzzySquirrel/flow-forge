@@ -2,6 +2,8 @@
 
 **An Agent Workforce Platform.** FlowForge separates the *platform* from the *knowledge and process*: the application knows nothing until a **Workforce Package** is installed. Install `Grade7-Maths.workforce` and a classroom workforce appears — Planner, Curriculum, Assessment, Feedback and Teacher agents, their skills, personas, workflows and rubrics. Install `Corporate-Onboarding.workforce` and the same software becomes a different workforce. Education is the flagship use case, not the limit.
 
+Flow Forge is an open engineering experiment exploring what an Agent Learning Operating System could look like: where workflows, people, AI agents, skills and knowledge evolve together through continuous learning.
+
 ## Core concepts
 
 | Concept | What it is |
@@ -58,6 +60,9 @@ Records in [docs/adr/](docs/adr/README.md).
 
 The detailed, task-level plan for the next phases — including "learn while you build" notes on the
 concepts behind each milestone — lives in [docs/PLAN.md](docs/PLAN.md).
+
+For a detailed view of the current Phase 1/kernel branch — including what you can run today and what
+it proves before the UI phase — see [docs/phase-1-kernel-architecture.md](docs/phase-1-kernel-architecture.md).
 
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
