@@ -23,7 +23,8 @@ const SCHEMA_NAMES: SchemaName[] = [
 const schemasDir = fileURLToPath(new URL('../schemas/', import.meta.url));
 
 const ajv = new Ajv2020({ allErrors: true, strict: false });
-addFormats.default ? addFormats.default(ajv) : (addFormats as unknown as (a: Ajv2020) => void)(ajv);
+const applyFormats = (addFormats as { default?: (a: Ajv2020) => void }).default ?? (addFormats as unknown as (a: Ajv2020) => void);
+applyFormats(ajv);
 
 const validators = new Map<SchemaName, ValidateFunction>();
 

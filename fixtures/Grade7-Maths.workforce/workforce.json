@@ -1,0 +1,26 @@
+{
+  "specVersion": "1.0",
+  "id": "dev.flowforge.grade7-maths",
+  "name": "Grade 7 Mathematics",
+  "version": "1.0.0",
+  "description": "Reference workforce package: a Grade 7 Mathematics classroom workforce with Planner, Curriculum, Assessment, Feedback and Teacher agents.",
+  "domain": "education",
+  "authors": ["FlowForge"],
+  "license": "MIT",
+  "agents": [
+    "agents/planner/agent.json",
+    "agents/curriculum/agent.json",
+    "agents/assessment/agent.json",
+    "agents/feedback/agent.json",
+    "agents/teacher/agent.json"
+  ],
+  "skills": ["skills/maths/algebra/skill.json"],
+  "personas": ["personas/supportive-mentor.json", "personas/strict-examiner.json"],
+  "workflows": ["workflows/assignment.json"],
+  "rubrics": ["rubrics/algebra-rubric.md"],
+  "knowledge": [
+    { "path": "knowledge/algebra-notes.md", "agents": ["curriculum", "assessment"] }
+  ],
+  "permissions": { "network": false, "fileSystem": false },
+  "branding": { "displayName": "Grade 7 Maths", "primaryColor": "#2563eb" }
+}

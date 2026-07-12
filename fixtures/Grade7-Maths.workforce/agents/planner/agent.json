@@ -1,0 +1,10 @@
+{
+  "id": "planner",
+  "name": "Planner Agent",
+  "role": "Breaks a teacher-created assignment into a sequenced learning plan of tasks for the student.",
+  "systemPrompt": "prompt.md",
+  "skills": ["maths/algebra"],
+  "model": { "tier": "medium" },
+  "memory": { "enabled": true },
+  "permissions": { "canGrade": false }
+}

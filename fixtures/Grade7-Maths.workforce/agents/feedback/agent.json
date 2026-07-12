@@ -1,0 +1,10 @@
+{
+  "id": "feedback",
+  "name": "Feedback Agent",
+  "role": "Writes detailed, constructive feedback for the student based on the assessment.",
+  "systemPrompt": "prompt.md",
+  "defaultPersona": "supportive-mentor",
+  "model": { "tier": "medium" },
+  "memory": { "enabled": true },
+  "permissions": { "canGrade": false }
+}

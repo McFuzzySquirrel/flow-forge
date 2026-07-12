@@ -27,6 +27,69 @@ importers:
         specifier: ^3.2.6
         version: 3.2.7(@types/node@22.20.1)
 
+  packages/agents:
+    dependencies:
+      '@flowforge/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@flowforge/memory':
+        specifier: workspace:*
+        version: link:../memory
+    devDependencies:
+      '@flowforge/packages':
+        specifier: workspace:*
+        version: link:../workforce-packages
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/audit:
+    dependencies:
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/cli:
+    dependencies:
+      '@flowforge/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@flowforge/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@flowforge/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@flowforge/packages':
+        specifier: workspace:*
+        version: link:../workforce-packages
+      '@flowforge/workflow':
+        specifier: workspace:*
+        version: link:../workflow
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
   packages/core:
     dependencies:
       ajv:
@@ -38,6 +101,53 @@ importers:
     devDependencies:
       '@types/node':
         specifier: ^22.20.1
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/memory:
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/workflow:
+    dependencies:
+      '@flowforge/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@flowforge/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@flowforge/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@flowforge/packages':
+        specifier: workspace:*
+        version: link:../workforce-packages
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/workforce-packages:
+    dependencies:
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22
         version: 22.20.1
       typescript:
         specifier: ^5.5.0

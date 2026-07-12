@@ -1,0 +1,9 @@
+{
+  "id": "teacher",
+  "name": "Teacher Agent",
+  "role": "Checks assessment and feedback for consistency with past marking before presenting to the human teacher.",
+  "systemPrompt": "prompt.md",
+  "model": { "tier": "medium" },
+  "memory": { "enabled": true },
+  "permissions": { "canSeeRubricAnswers": true, "canAccessLearnerHistory": true }
+}
