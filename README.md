@@ -53,6 +53,9 @@ node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment -
 
 ## Roadmap
 
+The detailed, task-level plan for the next phases — including "learn while you build" notes on the
+concepts behind each milestone — lives in [docs/PLAN.md](docs/PLAN.md).
+
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
 - **Phase 2 — Vertical slice UI** — Electron + React shell, teacher & learner portals, audit viewer
