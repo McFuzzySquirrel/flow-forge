@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/audit-record.schema.json",
+  "title": "Audit Record",
+  "description": "Immutable, hash-chained record of a single decision or action. Every agent step and every human override emits one. Makes every mark and decision explainable.",
+  "type": "object",
+  "required": ["id", "timestamp", "actor", "action", "hash", "previousHash"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "description": "Unique record id (UUID)." },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "actor": {
+      "type": "object",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["agent", "human", "system"] },
+        "id": { "type": "string" },
+        "persona": { "type": "string" }
+      }
+    },
+    "action": {
+      "type": "string",
+      "description": "What happened, e.g. 'agent.step', 'human.approval', 'human.override', 'package.install'."
+    },
+    "workflowRunId": { "type": "string" },
+    "nodeId": { "type": "string" },
+    "packageId": { "type": "string" },
+    "inputRefs": {
+      "type": "array",
+      "description": "References to inputs used (state variables, documents).",
+      "items": { "type": "string" }
+    },
+    "promptVersion": { "type": "string", "description": "Hash or version of the prompt used." },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "description": "Retrieved references/memory items that informed the decision.",
+      "items": {
+        "type": "object",
+        "required": ["source"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string" },
+          "excerpt": { "type": "string" },
+          "relevance": { "type": "number" }
+        }
+      }
+    },
+    "rubricSection": { "type": "string" },
+    "score": { "type": "number" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "override": {
+      "type": "object",
+      "description": "Present when a human overrides an agent decision.",
+      "required": ["originalValue", "newValue", "reason"],
+      "additionalProperties": false,
+      "properties": {
+        "originalValue": {},
+        "newValue": {},
+        "reason": { "type": "string" }
+      }
+    },
+    "detail": {
+      "type": "object",
+      "description": "Free-form structured detail for the action.",
+      "additionalProperties": true
+    },
+    "previousHash": {
+      "type": "string",
+      "description": "SHA-256 hash of the previous record in the chain ('genesis' for the first)."
+    },
+    "hash": {
+      "type": "string",
+      "description": "SHA-256 hash of this record's canonical content plus previousHash."
+    }
+  }
+}

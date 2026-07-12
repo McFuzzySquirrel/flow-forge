@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/workforce-package.schema.json",
+  "title": "Workforce Package Manifest",
+  "description": "Manifest (workforce.json) at the root of a .workforce package. A package is the unit of distribution: it defines the entire workforce (agents, skills, personas, workflows, rubrics, knowledge) for a domain. The platform knows nothing until a package is installed.",
+  "type": "object",
+  "required": ["specVersion", "id", "name", "version", "agents", "workflows"],
+  "additionalProperties": false,
+  "properties": {
+    "specVersion": {
+      "type": "string",
+      "description": "Version of the workforce package specification this manifest conforms to.",
+      "enum": ["1.0"]
+    },
+    "id": {
+      "type": "string",
+      "description": "Globally unique reverse-DNS style package identifier.",
+      "pattern": "^[a-z0-9]+([.-][a-z0-9]+)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the package content.",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
+    },
+    "description": { "type": "string" },
+    "domain": {
+      "type": "string",
+      "description": "Domain this workforce serves, e.g. 'education', 'compliance', 'onboarding'."
+    },
+    "authors": { "type": "array", "items": { "type": "string" } },
+    "license": { "type": "string" },
+    "agents": {
+      "type": "array",
+      "description": "Relative paths to agent definition files (agent.json) inside agents/.",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "skills": {
+      "type": "array",
+      "description": "Relative paths to skill manifest files (skill.json) inside skills/.",
+      "items": { "type": "string" }
+    },
+    "personas": {
+      "type": "array",
+      "description": "Relative paths to persona definition files (persona.json) inside personas/.",
+      "items": { "type": "string" }
+    },
+    "workflows": {
+      "type": "array",
+      "description": "Relative paths to workflow definition files (workflow.json) inside workflows/.",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "rubrics": {
+      "type": "array",
+      "description": "Relative paths to rubric documents.",
+      "items": { "type": "string" }
+    },
+    "knowledge": {
+      "type": "array",
+      "description": "Knowledge sources to be embedded into agent memories on install.",
+      "items": {
+        "type": "object",
+        "required": ["path", "agents"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" },
+          "agents": {
+            "type": "array",
+            "description": "Agent ids whose memory receives this knowledge.",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Package-level permission declarations.",
+      "additionalProperties": false,
+      "properties": {
+        "network": { "type": "boolean", "default": false },
+        "fileSystem": { "type": "boolean", "default": false }
+      }
+    },
+    "branding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "displayName": { "type": "string" },
+        "icon": { "type": "string" },
+        "primaryColor": { "type": "string" }
+      }
+    },
+    "signing": {
+      "type": "object",
+      "description": "Placeholder for package signing and provenance (Phase 4).",
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": { "type": "string" },
+        "signature": { "type": "string" },
+        "publisher": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/persona.schema.json",
+  "title": "Persona Definition",
+  "description": "A persona defines interaction style and decision policy independently of capability. The same agent can be a Supportive Mentor or a Strict Examiner without changing its skills, tools or memory.",
+  "type": "object",
+  "required": ["id", "name", "promptOverlay"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+    },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "tone": {
+      "type": "string",
+      "description": "Short description of communication tone, e.g. 'warm and encouraging'."
+    },
+    "promptOverlay": {
+      "type": "string",
+      "description": "Prompt text (or relative path ending in .md) appended to the agent's system prompt to shape behaviour."
+    },
+    "decisionPolicy": {
+      "type": "object",
+      "description": "Adjustments to decision-making, interpreted by the agent runtime.",
+      "additionalProperties": false,
+      "properties": {
+        "strictness": {
+          "type": "string",
+          "enum": ["lenient", "balanced", "strict"]
+        },
+        "givesDirectAnswers": { "type": "boolean" },
+        "encouragementLevel": {
+          "type": "string",
+          "enum": ["low", "medium", "high"]
+        }
+      }
+    },
+    "compatibleAgents": {
+      "type": "array",
+      "description": "Agent ids this persona may be applied to. Empty means any.",
+      "items": { "type": "string" }
+    }
+  }
+}

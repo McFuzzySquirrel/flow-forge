@@ -1,0 +1,26 @@
+{
+  "name": "flow-forge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FlowForge — an Agent Workforce Platform. Installable Workforce Packages define agents, skills, personas and workflows; the platform knows nothing until a package is installed.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.20.1",
+    "eslint": "^9.0.0",
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.2.6"
+  }
+}
