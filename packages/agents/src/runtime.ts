@@ -72,9 +72,13 @@ export class AgentRuntime {
     if (personaId && !persona) throw new Error(`Unknown persona '${personaId}'`);
 
     const skillInstructions: string[] = [];
-    for (const skillId of agent.skills ?? []) {
-      const skill = this.pkg.skills.get(skillId);
-      if (skill?.description) skillInstructions.push(`Skill (${skill.name}): ${skill.description}`);
+    for (const skillName of agent.skills ?? []) {
+      const skill = this.pkg.skills.get(skillName);
+      if (!skill) continue;
+      const title = skill.manifest.metadata?.displayName ?? skill.manifest.name;
+      skillInstructions.push(
+        `Skill (${title}): ${skill.manifest.description}\n\n${skill.instructions}`.trim()
+      );
     }
 
     const systemPrompt = buildSystemPrompt(agent, persona, skillInstructions);

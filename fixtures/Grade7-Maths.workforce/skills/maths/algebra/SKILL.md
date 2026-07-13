@@ -1,3 +1,16 @@
+---
+name: algebra
+description: Linear equations, expressions, and substitution at Grade 7 level.
+version: 1.0.0
+metadata:
+  displayName: Grade 7 Algebra
+  prompts:
+    - prompts.md
+  embeddings:
+    - ../../../knowledge/algebra-notes.md
+  compatibleAgents: []
+---
+
 # Grade 7 Algebra Skill
 
 Scope: simplifying expressions, solving one- and two-step linear equations, substitution into formulas.

@@ -1,8 +1,10 @@
 import { readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import {
   validate,
   type AgentDefinition,
+  type LoadedSkill,
   type LoadedWorkforcePackage,
   type PersonaDefinition,
   type SkillManifest,
@@ -22,6 +24,39 @@ export class PackageValidationError extends Error {
 
 function readJson(path: string): unknown {
   return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
+/**
+ * Parses a SKILL.md file (agentskills.io Agent Skills convention): YAML
+ * frontmatter is the skill manifest, the Markdown body is the instructions.
+ */
+export function parseSkillFile(path: string, label: string): LoadedSkill {
+  const source = readFileSync(path, 'utf8');
+  const match = FRONTMATTER_RE.exec(source);
+  if (!match) {
+    throw new PackageValidationError(`Invalid ${label}`, [
+      'SKILL.md must start with a YAML frontmatter block delimited by ---'
+    ]);
+  }
+  let frontmatter: unknown;
+  try {
+    frontmatter = parseYaml(match[1]!);
+  } catch (error) {
+    throw new PackageValidationError(`Invalid ${label}`, [
+      `frontmatter is not valid YAML: ${error instanceof Error ? error.message : String(error)}`
+    ]);
+  }
+  assertValid('skill', frontmatter, label);
+  const manifest = frontmatter as SkillManifest;
+  const dir = dirname(path);
+  if (manifest.name !== basename(dir)) {
+    throw new PackageValidationError(`Invalid ${label}`, [
+      `frontmatter name '${manifest.name}' must match the skill folder name '${basename(dir)}'`
+    ]);
+  }
+  return { manifest, instructions: source.slice(match[0].length).trim(), dir };
 }
 
 function assertValid(schema: Parameters<typeof validate>[0], doc: unknown, label: string): void {
@@ -55,11 +90,13 @@ export function loadWorkforcePackage(packageDir: string): LoadedWorkforcePackage
     agents.set(agent.id, agent);
   }
 
-  const skills = new Map<string, SkillManifest>();
+  const skills = new Map<string, LoadedSkill>();
   for (const relPath of manifest.skills ?? []) {
-    const skill = readJson(join(rootDir, relPath)) as SkillManifest;
-    assertValid('skill', skill, relPath);
-    skills.set(skill.id, skill);
+    const skill = parseSkillFile(join(rootDir, relPath), relPath);
+    if (skills.has(skill.manifest.name)) {
+      throw new PackageValidationError('Duplicate skill name', [skill.manifest.name]);
+    }
+    skills.set(skill.manifest.name, skill);
   }
 
   const personas = new Map<string, PersonaDefinition>();

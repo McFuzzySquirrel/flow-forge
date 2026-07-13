@@ -3,7 +3,7 @@
   "name": "Curriculum Agent",
   "role": "Knows the Grade 7 Mathematics syllabus and checks that plans and assessments align with it.",
   "systemPrompt": "prompt.md",
-  "skills": ["maths/algebra"],
+  "skills": ["algebra"],
   "model": { "tier": "small" },
   "memory": { "enabled": true }
 }

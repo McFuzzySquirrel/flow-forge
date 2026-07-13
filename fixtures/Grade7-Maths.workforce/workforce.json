@@ -14,7 +14,7 @@
     "agents/feedback/agent.json",
     "agents/teacher/agent.json"
   ],
-  "skills": ["skills/maths/algebra/skill.json"],
+  "skills": ["skills/maths/algebra/SKILL.md"],
   "personas": ["personas/supportive-mentor.json", "personas/strict-examiner.json"],
   "workflows": ["workflows/assignment.json"],
   "rubrics": ["rubrics/algebra-rubric.md"],

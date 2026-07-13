@@ -10,7 +10,7 @@
 | --- | --- |
 | **Workforce Package** | The unit of distribution (`.workforce`): agents, skills, personas, workflows, rubrics, knowledge, permissions, branding. Versioned, validatable, shareable. |
 | **Agent** | A digital specialist with a role, skills, tools, model-tier requirement, its own memory namespace and enforced permissions. |
-| **Skill** | A plug-in folder (`skill.json` + `skills.md` + prompts + tools) of domain knowledge. Swapping the curriculum swaps skills — no code changes. |
+| **Skill** | A plug-in folder of domain knowledge with a single `SKILL.md` ([Agent Skills](https://agentskills.io) format: YAML frontmatter manifest + Markdown instructions) plus prompts and tools. Swapping the curriculum swaps skills — no code changes. |
 | **Persona** | Interaction style and decision policy layered *on top of* capability. The same Assessment Agent can be a Supportive Mentor or a Strict Examiner. |
 | **Workflow** | A declarative spec (agent steps, human-input, human-approval, retry, branch). Human-in-the-loop is a first-class node type. Portable across runners. |
 | **State vs Memory** | State is transactional workflow data (engine-owned). Memory is accumulated knowledge, owned per agent in its own namespace — replacing one agent never loses another's memory. |

@@ -44,17 +44,32 @@ export interface AgentDefinition {
   outputSchema?: Record<string, unknown>;
 }
 
+/** Parsed YAML frontmatter of a SKILL.md file (agentskills.io convention). */
 export interface SkillManifest {
-  id: string;
+  /** Skill identifier: lowercase letters, digits and hyphens, matching the skill folder name. */
   name: string;
-  version: string;
-  description?: string;
-  instructions?: string;
-  prompts?: string[];
-  tools?: string;
-  embeddings?: string[];
-  dependencies?: string[];
-  compatibleAgents?: string[];
+  description: string;
+  version?: string;
+  license?: string;
+  'allowed-tools'?: string[];
+  metadata?: {
+    displayName?: string;
+    prompts?: string[];
+    tools?: string;
+    embeddings?: string[];
+    dependencies?: string[];
+    compatibleAgents?: string[];
+    [key: string]: unknown;
+  };
+}
+
+/** A skill resolved from disk: frontmatter manifest plus the SKILL.md instructions body. */
+export interface LoadedSkill {
+  manifest: SkillManifest;
+  /** Markdown body of SKILL.md — the skill's instructions. */
+  instructions: string;
+  /** Absolute path to the skill folder. */
+  dir: string;
 }
 
 export interface PersonaDefinition {
@@ -180,7 +195,7 @@ export interface LoadedWorkforcePackage {
   rootDir: string;
   manifest: WorkforcePackageManifest;
   agents: Map<string, AgentDefinition>;
-  skills: Map<string, SkillManifest>;
+  skills: Map<string, LoadedSkill>;
   personas: Map<string, PersonaDefinition>;
   workflows: Map<string, WorkflowDefinition>;
 }
