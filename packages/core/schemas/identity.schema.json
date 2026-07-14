@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flowforge.dev/schemas/identity.schema.json",
+  "title": "Identity Configuration",
+  "description": "Deployment-level identity and authorization configuration: OIDC providers, claim-to-role mappings, role permission grants and session policy. Workforce packages declare the roles their workflows require; this configuration maps IdP claims onto those roles.",
+  "type": "object",
+  "required": ["providers", "roleMappings"],
+  "additionalProperties": false,
+  "properties": {
+    "providers": {
+      "type": "array",
+      "description": "Identity providers enabled for this deployment. Several may be enabled simultaneously.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+            "description": "Deployment-unique provider id, e.g. 'entra', 'google', 'keycloak'."
+          },
+          "type": {
+            "type": "string",
+            "enum": ["oidc", "mock"],
+            "description": "'oidc' for any OpenID Connect compliant provider; 'mock' for tests and offline development."
+          },
+          "displayName": { "type": "string" },
+          "issuer": {
+            "type": "string",
+            "format": "uri",
+            "description": "OIDC issuer URL; discovery is read from {issuer}/.well-known/openid-configuration. Required when type is 'oidc'."
+          },
+          "clientId": {
+            "type": "string",
+            "description": "OAuth client id registered with the provider. Required when type is 'oidc'."
+          },
+          "scopes": {
+            "type": "array",
+            "description": "Scopes requested during authorization. Defaults to ['openid', 'profile', 'email'].",
+            "items": { "type": "string" }
+          },
+          "groupsClaim": {
+            "type": "string",
+            "description": "Name of the token/userinfo claim carrying group memberships. Defaults to 'groups'."
+          }
+        }
+      }
+    },
+    "roleMappings": {
+      "type": "array",
+      "description": "Maps IdP claims to FlowForge roles declared by workforce packages, e.g. group 'Staff' → role 'teacher'.",
+      "items": {
+        "type": "object",
+        "required": ["claim", "value", "role"],
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string",
+            "description": "Restrict this mapping to one provider id. Omit to apply to all providers."
+          },
+          "claim": {
+            "type": "string",
+            "description": "Claim to inspect, e.g. 'groups' or 'email'."
+          },
+          "value": {
+            "type": "string",
+            "description": "Claim value (or array member) that grants the role."
+          },
+          "role": {
+            "type": "string",
+            "description": "FlowForge role granted, matching roles used on workflow human nodes."
+          }
+        }
+      }
+    },
+    "permissions": {
+      "type": "object",
+      "description": "Role-to-permission grants. Keys are role names; values are the actions the role may perform.",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "workflow.start",
+            "workflow.input",
+            "workflow.approve",
+            "audit.view",
+            "package.manage"
+          ]
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "description": "Session and token lifetime policy.",
+      "additionalProperties": false,
+      "properties": {
+        "ttlSeconds": {
+          "type": "integer",
+          "minimum": 60,
+          "description": "Maximum session lifetime in seconds. Defaults to 8 hours."
+        }
+      }
+    }
+  }
+}

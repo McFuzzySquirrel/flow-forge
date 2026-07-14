@@ -82,7 +82,7 @@
       "role": "teacher",
       "subject": "assessment",
       "onApprove": "done",
-      "onReject": "assess"
+      "onReject": "student-work"
     },
     { "id": "done", "type": "end" }
   ]

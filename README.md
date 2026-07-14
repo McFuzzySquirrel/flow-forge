@@ -52,6 +52,7 @@ node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment -
 2. **Everything behind an interface** — `ModelProvider`, `VectorStore`, `StateStore`, `AuditSink` are swappable (local/offline vs cloud).
 3. **No hardcoded agents** — all behaviour comes from packages; the platform installs empty.
 4. **Audit is runtime-enforced** — an agent step cannot run without emitting an audit record.
+5. **All human actions are authenticated and role-checked** — workflow input and approvals require an OIDC-verified `Principal` whose deployment-mapped roles match the node's declared role ([ADR-0010](docs/adr/0010-oidc-identity-and-role-based-authorization.md)).
 
 The reasoning behind these and other foundational decisions is captured as Architecture Decision
 Records in [docs/adr/](docs/adr/README.md).

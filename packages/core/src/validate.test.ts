@@ -2,15 +2,34 @@ import { describe, expect, it } from 'vitest';
 import { schemaNames, validate } from './validate.js';
 
 describe('core schema validation', () => {
-  it('exposes all six schemas', () => {
+  it('exposes all seven schemas', () => {
     expect(schemaNames()).toEqual([
       'workforce-package',
       'agent',
       'skill',
       'persona',
       'workflow',
-      'audit-record'
+      'audit-record',
+      'identity'
     ]);
+  });
+
+  it('validates identity configuration', () => {
+    const valid = validate('identity', {
+      providers: [
+        { id: 'entra', type: 'oidc', issuer: 'https://login.example.com/tenant', clientId: 'abc' }
+      ],
+      roleMappings: [{ claim: 'groups', value: 'Staff', role: 'teacher' }],
+      permissions: { teacher: ['workflow.start', 'workflow.approve'] },
+      session: { ttlSeconds: 3600 }
+    });
+    expect(valid.errors).toEqual([]);
+
+    const invalid = validate('identity', {
+      providers: [{ id: 'x', type: 'saml' }],
+      roleMappings: []
+    });
+    expect(invalid.valid).toBe(false);
   });
 
   it('accepts a minimal valid manifest', () => {
