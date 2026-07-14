@@ -101,7 +101,7 @@ describe('WorkflowEngine — Grade7-Maths end-to-end (Phase 1 milestone gate)', 
     expect(assessRecord.model).toMatchObject({ provider: 'mock' });
   });
 
-  it('routes rejection back to re-assessment', async () => {
+  it('routes rejection back to the student to revise and resubmit', async () => {
     const { pkg, engine } = makeEngine();
     const workflow = pkg.workflows.get('assignment')!;
     let run = await engine.start(workflow);
@@ -109,9 +109,15 @@ describe('WorkflowEngine — Grade7-Maths end-to-end (Phase 1 milestone gate)', 
     run = await engine.resume(workflow, run.id, { userId: 'student-1', value: 'work' });
     expect(run.pending!.kind).toBe('approval');
     run = await engine.resume(workflow, run.id, { userId: 'teacher-1', approved: false, reason: 'Too lenient' });
-    // rejection re-runs assessment → feedback → consistency → pauses at approval again
+    // rejection returns to the student to make changes and resubmit
+    expect(run.status).toBe('waitingForHuman');
+    expect(run.pending).toMatchObject({ kind: 'input', role: 'student', nodeId: 'student-work' });
+    // resubmission re-runs assessment → feedback → consistency → pauses at approval again
+    run = await engine.resume(workflow, run.id, { userId: 'student-1', value: 'revised work' });
     expect(run.status).toBe('waitingForHuman');
     expect(run.pending!.nodeId).toBe('teacher-approval');
+    run = await engine.resume(workflow, run.id, { userId: 'teacher-1', approved: true, reason: 'Fair now' });
+    expect(run.status).toBe('completed');
   });
 
   it('fails a run when an agent keeps erroring, with retries audited', async () => {
