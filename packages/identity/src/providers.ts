@@ -217,16 +217,16 @@ export class OidcIdentityProvider implements IdentityProvider {
  */
 export class MockIdentityProvider implements IdentityProvider {
   readonly id: string;
-  private readonly users: Map<string, ClaimSet>;
+  private readonly tokenClaims: Map<string, ClaimSet>;
 
-  constructor(id = 'mock', users: Record<string, ClaimSet> = {}) {
+  constructor(id = 'mock', tokenClaims: Record<string, ClaimSet> = {}) {
     this.id = id;
-    this.users = new Map(Object.entries(users));
+    this.tokenClaims = new Map(Object.entries(tokenClaims));
   }
 
   /** Register a user; the returned token authenticates as that user. */
   addUser(token: string, claims: ClaimSet): this {
-    this.users.set(token, claims);
+    this.tokenClaims.set(token, claims);
     return this;
   }
 
@@ -257,7 +257,7 @@ export class MockIdentityProvider implements IdentityProvider {
   }
 
   async claims(tokens: TokenSet): Promise<ClaimSet> {
-    const claims = this.users.get(tokens.accessToken);
+    const claims = this.tokenClaims.get(tokens.accessToken);
     if (!claims) throw new Error(`Unknown token for mock provider '${this.id}'`);
     return claims;
   }

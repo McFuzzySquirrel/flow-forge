@@ -70,7 +70,7 @@ export class IdentityService {
   ) {
     this.roleMapper = new RoleMapper(config.roleMappings);
     this.policy = new PermissionPolicy(config.permissions);
-    this.sessionTtlMs = (config.session?.ttlSeconds ?? DEFAULT_SESSION_TTL_MS / 1000) * 1000;
+    this.sessionTtlMs = config.session?.ttlSeconds !== undefined ? config.session.ttlSeconds * 1000 : DEFAULT_SESSION_TTL_MS;
     this.groupsClaims = new Map(config.providers.map((p) => [p.id, p.groupsClaim ?? 'groups']));
   }
 
