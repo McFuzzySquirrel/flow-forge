@@ -26,7 +26,9 @@ packages/
   memory/              @flowforge/memory    — per-agent memory service (swappable vector store)
   audit/               @flowforge/audit     — append-only, hash-chained audit log
   workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching)
+  identity/            @flowforge/identity  — OIDC identity, claim-to-role mapping, sessions (ADR-0010)
   cli/                 @flowforge/cli       — flowforge validate | inspect | run
+  desktop/             @flowforge/desktop   — Electron + React desktop shell (Phase 2 vertical slice)
 fixtures/
   Grade7-Maths.workforce/                   — reference workforce package
 ```
