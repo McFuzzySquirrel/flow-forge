@@ -9,7 +9,8 @@ export type SchemaName =
   | 'skill'
   | 'persona'
   | 'workflow'
-  | 'audit-record';
+  | 'audit-record'
+  | 'identity';
 
 const SCHEMA_NAMES: SchemaName[] = [
   'workforce-package',
@@ -17,7 +18,8 @@ const SCHEMA_NAMES: SchemaName[] = [
   'skill',
   'persona',
   'workflow',
-  'audit-record'
+  'audit-record',
+  'identity'
 ];
 
 const schemasDir = fileURLToPath(new URL('../schemas/', import.meta.url));

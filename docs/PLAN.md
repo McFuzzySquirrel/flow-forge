@@ -315,6 +315,31 @@ domain-agnostic (second package), and runnable on production-grade infrastructur
 
 ---
 
+## Cross-phase — Identity & Governance (ADR-0010)
+
+**Goal:** authenticated, role-checked human actions across every surface, with any OIDC-compliant
+identity provider (Microsoft Entra ID, Google Workspace for Education, Auth0, Keycloak).
+
+Shipped in the kernel (this phase-0/1 slice):
+
+| # | Task | Done when |
+| --- | --- | --- |
+| I.1 | ADR-0010 settles the identity architecture (OIDC-only; dedicated session store; RBAC + per-run participant binding; packages declare roles, deployments map claims) | ADR accepted and indexed ✔ |
+| I.2 | `identity.schema.json` in `packages/core/schemas` — providers, claim-to-role mappings, role permissions, session policy | Config validates via `validate('identity', …)` with tests ✔ |
+| I.3 | `packages/identity` — `IdentityProvider` interface, `OidcIdentityProvider` (auth-code + PKCE, device flow, refresh, userinfo), `MockIdentityProvider`, `IdentityRegistry`, `RoleMapper`, `PermissionPolicy`, `SessionStore`, `IdentityService` with audited auth events | Unit tests cover claim mapping, sessions, audited login/refresh/denial ✔ |
+| I.4 | Engine enforcement — `WorkflowEngine.resume` requires a `Principal`, checks the node role, binds roles per run, audits `workflow.authorization.denied` | Grade7-Maths tests prove a student cannot approve and a teacher cannot submit student work ✔ |
+| I.5 | CLI wiring — dev identity by default; `--identity <config.json>` signs users in via the OIDC device flow | `flowforge run … --identity` completes a device-flow login ✔ |
+
+Follow-up work (slot into the phases below):
+
+| # | Task | Done when |
+| --- | --- | --- |
+| I.6 | Desktop app login via authorization-code + PKCE (Milestone 2.1+) | UI shows the signed-in user; every human step passes the Principal |
+| I.7 | Persistent `SessionStore` implementation (with 4.3's persistence substrate) | Sessions survive restart; revocation works across nodes |
+| I.8 | Admin governance UI — role-mapping management, session policy, per-user audit trail (builds on `IdentityService.auditTrailForUser`) (Milestone 2.5+) | Admin can review who did what, as which role, asserted by which provider |
+
+---
+
 ## Suggested build order & dependencies
 
 ```

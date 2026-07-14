@@ -4,6 +4,7 @@ import type {
   BranchNode,
   HumanApprovalNode,
   HumanInputNode,
+  Principal,
   WorkflowDefinition,
   WorkflowNode
 } from '@flowforge/core';
@@ -11,6 +12,14 @@ import { AuditLog } from '@flowforge/audit';
 import type { AgentRuntime } from '@flowforge/agents';
 
 export type RunStatus = 'running' | 'waitingForHuman' | 'completed' | 'failed';
+
+/** Thrown when a principal is not allowed to act on the pending human step. */
+export class AuthorizationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthorizationError';
+  }
+}
 
 export interface PendingHumanTask {
   nodeId: string;
@@ -27,6 +36,8 @@ export interface WorkflowRun {
   currentNodeId?: string;
   state: Record<string, unknown>;
   pending?: PendingHumanTask;
+  /** Per-run participant bindings: role → principal id of whoever first acted in that role. */
+  participants?: Record<string, string>;
   error?: string;
 }
 
@@ -120,11 +131,19 @@ export class WorkflowEngine {
     return this.advance(workflow, run);
   }
 
-  /** Resume a paused run with human input or an approval decision. */
+  /**
+   * Resume a paused run with human input or an approval decision. The caller
+   * must supply an authenticated Principal (ADR-0010); the engine verifies the
+   * principal holds the pending node's role and, once someone has acted in a
+   * role, binds that role to them for the rest of the run (only the student
+   * who submitted may resubmit; only the assigned teacher may approve).
+   * Failed checks emit an audited 'workflow.authorization.denied' event and
+   * throw AuthorizationError without altering the run.
+   */
   async resume(
     workflow: WorkflowDefinition,
     runId: string,
-    humanResponse: { userId: string; value?: unknown; approved?: boolean; reason?: string }
+    humanResponse: { principal: Principal; value?: unknown; approved?: boolean; reason?: string }
   ): Promise<WorkflowRun> {
     const run = this.store.load(runId);
     if (!run) throw new Error(`Unknown run '${runId}'`);
@@ -132,21 +151,34 @@ export class WorkflowEngine {
       throw new Error(`Run '${runId}' is not waiting for human input`);
     }
     const node = this.node(workflow, run.currentNodeId);
+    const { principal } = humanResponse;
+    const actor = {
+      type: 'human' as const,
+      id: principal.id,
+      provider: principal.provider,
+      roles: principal.roles
+    };
+
+    if (node.type !== 'humanInput' && node.type !== 'humanApproval') {
+      throw new Error(`Node '${node.id}' is not a human step`);
+    }
+    this.authorize(run, node.role, principal, actor);
+    run.participants = { ...run.participants, [node.role]: principal.id };
 
     if (node.type === 'humanInput') {
       run.state[node.output] = humanResponse.value;
       this.audit.record({
-        actor: { type: 'human', id: humanResponse.userId },
+        actor,
         action: 'human.input',
         workflowRunId: run.id,
         nodeId: node.id,
         detail: { output: node.output }
       });
       run.currentNodeId = node.next;
-    } else if (node.type === 'humanApproval') {
+    } else {
       const approved = humanResponse.approved === true;
       this.audit.record({
-        actor: { type: 'human', id: humanResponse.userId },
+        actor,
         action: approved ? 'human.approval' : 'human.rejection',
         workflowRunId: run.id,
         nodeId: node.id,
@@ -156,13 +188,39 @@ export class WorkflowEngine {
       if (!run.currentNodeId) {
         throw new Error(`Approval node '${node.id}' has no target for decision`);
       }
-    } else {
-      throw new Error(`Node '${node.id}' is not a human step`);
     }
 
     run.pending = undefined;
     run.status = 'running';
     return this.advance(workflow, run);
+  }
+
+  /** Role check plus per-run participant binding; denials are audited. */
+  private authorize(
+    run: WorkflowRun,
+    role: string,
+    principal: Principal,
+    actor: { type: 'human'; id: string; provider?: string; roles?: string[] }
+  ): void {
+    let reason: string | undefined;
+    if (!principal.roles.includes(role)) {
+      reason = `principal does not hold role '${role}'`;
+    } else {
+      const boundTo = run.participants?.[role];
+      if (boundTo && boundTo !== principal.id) {
+        reason = `role '${role}' is bound to another participant for this run`;
+      }
+    }
+    if (reason) {
+      this.audit.record({
+        actor,
+        action: 'workflow.authorization.denied',
+        workflowRunId: run.id,
+        nodeId: run.currentNodeId,
+        detail: { requiredRole: role, reason }
+      });
+      throw new AuthorizationError(`Not authorized to act on run '${run.id}': ${reason}`);
+    }
   }
 
   getRun(runId: string): WorkflowRun | undefined {

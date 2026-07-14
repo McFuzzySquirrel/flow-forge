@@ -161,6 +161,10 @@ export interface AuditActor {
   type: 'agent' | 'human' | 'system';
   id: string;
   persona?: string;
+  /** Identity provider that asserted a human actor's identity. */
+  provider?: string;
+  /** FlowForge roles held by the actor at the time of the action. */
+  roles?: string[];
 }
 
 export interface AuditEvidence {
@@ -198,4 +202,51 @@ export interface LoadedWorkforcePackage {
   skills: Map<string, LoadedSkill>;
   personas: Map<string, PersonaDefinition>;
   workflows: Map<string, WorkflowDefinition>;
+}
+
+/** An authenticated user, normalized across identity providers (ADR-0010). */
+export interface Principal {
+  /** Stable subject identifier from the identity provider ('sub' claim). */
+  id: string;
+  displayName?: string;
+  email?: string;
+  /** Id of the identity provider that authenticated this principal. */
+  provider: string;
+  /** Raw group memberships asserted by the provider. */
+  groups?: string[];
+  /** FlowForge roles resolved via the deployment's claim-to-role mappings. */
+  roles: string[];
+}
+
+/** Actions a role may perform, granted via identity configuration. */
+export type Permission =
+  | 'workflow.start'
+  | 'workflow.input'
+  | 'workflow.approve'
+  | 'audit.view'
+  | 'package.manage';
+
+export interface IdentityProviderConfig {
+  id: string;
+  type: 'oidc' | 'mock';
+  displayName?: string;
+  issuer?: string;
+  clientId?: string;
+  scopes?: string[];
+  groupsClaim?: string;
+}
+
+export interface RoleMapping {
+  provider?: string;
+  claim: string;
+  value: string;
+  role: string;
+}
+
+/** Deployment identity configuration mirroring identity.schema.json. */
+export interface IdentityConfig {
+  providers: IdentityProviderConfig[];
+  roleMappings: RoleMapping[];
+  permissions?: Record<string, Permission[]>;
+  session?: { ttlSeconds?: number };
 }

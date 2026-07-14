@@ -73,6 +73,9 @@ importers:
       '@flowforge/core':
         specifier: workspace:*
         version: link:../core
+      '@flowforge/identity':
+        specifier: workspace:*
+        version: link:../identity
       '@flowforge/memory':
         specifier: workspace:*
         version: link:../memory
@@ -101,6 +104,22 @@ importers:
     devDependencies:
       '@types/node':
         specifier: ^22.20.1
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/identity:
+    dependencies:
+      '@flowforge/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22
         version: 22.20.1
       typescript:
         specifier: ^5.5.0

@@ -18,6 +18,7 @@ consequences — so future contributors can understand *why* the system is the w
 | [0007](0007-state-vs-memory-separation.md) | Separate transactional state from per-agent memory namespaces | Accepted |
 | [0008](0008-pnpm-typescript-monorepo.md) | pnpm + TypeScript monorepo tooling | Accepted |
 | [0009](0009-agent-skills-skill-md-format.md) | Adopt the Agent Skills SKILL.md format for skills | Accepted |
+| [0010](0010-oidc-identity-and-role-based-authorization.md) | OIDC identity and role-based authorization | Accepted |
 
 ## Process
 

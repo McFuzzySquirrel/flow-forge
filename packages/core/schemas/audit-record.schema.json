@@ -16,7 +16,16 @@
       "properties": {
         "type": { "type": "string", "enum": ["agent", "human", "system"] },
         "id": { "type": "string" },
-        "persona": { "type": "string" }
+        "persona": { "type": "string" },
+        "provider": {
+          "type": "string",
+          "description": "Identity provider that asserted a human actor's identity."
+        },
+        "roles": {
+          "type": "array",
+          "description": "FlowForge roles held by the actor at the time of the action.",
+          "items": { "type": "string" }
+        }
       }
     },
     "action": {
