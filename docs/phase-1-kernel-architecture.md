@@ -40,7 +40,12 @@ claims:
 5. **The kernel is modular enough to survive a UI phase.** Model providers, memory, workflow state
    and audit sinks are already behind interfaces, so Phase 2 can add a desktop shell without
    rewriting the core.
-6. **One end-to-end learning workflow already exists.** The Grade 7 Maths fixture is enough to prove
+6. **Human actions are authenticated and role-checked (ADR-0010).** Identity is OIDC-only via
+   `packages/identity`; `WorkflowEngine.resume` requires a `Principal`, verifies the pending node's
+   role, binds roles to participants per run, and emits an audited
+   `workflow.authorization.denied` event on failure. Packages declare roles; deployments map
+   identity-provider claims to those roles via `identity.schema.json`-validated config.
+7. **One end-to-end learning workflow already exists.** The Grade 7 Maths fixture is enough to prove
    the platform can orchestrate a realistic teacher → learner → agent → teacher loop.
 
 ## Architecture at this phase
@@ -62,6 +67,10 @@ that has not passed this layer.
   on human steps, resumes with supplied responses, and tracks run state.
 - `packages/memory` provides the per-agent memory namespace abstraction.
 - `packages/audit` maintains the append-only, hash-chained audit trail.
+- `packages/identity` provides authentication and role mapping (ADR-0010): an `IdentityProvider`
+  interface with OIDC (auth-code + PKCE, device flow, refresh) and mock implementations, an
+  `IdentityRegistry`, `RoleMapper`, `PermissionPolicy`, `SessionStore`, and an `IdentityService`
+  that audits every login, refresh and denial.
 
 These packages form the kernel that Phase 2 should wrap rather than replace.
 
@@ -84,8 +93,11 @@ The main runtime path on this branch is:
    engine.
 4. The workflow engine starts at the workflow's `start` node.
 5. Agent nodes call the agent runtime; human nodes pause the run and return pending work.
-6. Human answers are fed back into `resume`, which continues the workflow from persisted state.
-7. Completion or failure is reflected in the final run status and the audit chain.
+6. A `Principal` is obtained for the pending role — from the dev identity service by default, or via
+   the OIDC device flow when `--identity <config.json>` is supplied.
+7. Human answers are fed back into `resume` together with the `Principal`; the engine authorizes the
+   action (role check + per-run participant binding) and continues from persisted state.
+8. Completion or failure is reflected in the final run status and the audit chain.
 
 ## Evidence available on this branch
 
@@ -108,6 +120,8 @@ Phase 2 should preserve these properties:
 - the workflow engine remains the single authority for run state and pause/resume behaviour
 - audit generation stays runtime-enforced
 - the renderer/UI is an adapter over typed interfaces, not a place where kernel logic leaks
+- every human step passes through an authenticated `Principal`; the UI never bypasses the engine's
+  authorization checks, and tokens/sessions stay in the trusted (main) process
 
 If those constraints hold, Phase 2 can add user experience without weakening the architectural proof
 this branch already establishes.

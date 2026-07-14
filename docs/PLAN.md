@@ -7,7 +7,10 @@ companion.
 
 **Where we are:** Phase 0 (Foundations) and Phase 1 (Kernel) are complete. The monorepo builds
 (`pnpm build`), tests pass (`pnpm test`), and the CLI can validate, inspect and headlessly run the
-`Grade7-Maths.workforce` reference package with the mock model provider.
+`Grade7-Maths.workforce` reference package with the mock model provider. The identity kernel
+(ADR-0010) has also landed: `packages/identity` provides OIDC sign-in, claim-to-role mapping and
+sessions, and `WorkflowEngine.resume` now requires an authenticated `Principal` with role checks
+and per-run participant binding (tasks I.1–I.5 below).
 
 **Design rules that govern everything below** (see README):
 
@@ -15,6 +18,8 @@ companion.
 2. Everything behind an interface — `ModelProvider`, `VectorStore`, `StateStore`, `AuditSink` are swappable.
 3. No hardcoded agents — all behaviour comes from `.workforce` packages.
 4. Audit is runtime-enforced — every agent step emits an immutable, hash-chained audit record.
+5. Human actions are authenticated and role-checked (ADR-0010) — every surface that resumes a run
+   must supply a `Principal`; the engine, not the UI, is the authorization authority.
 
 ---
 
@@ -34,6 +39,7 @@ broad-but-shallow UI over everything.
 | 2.1.3 | Wire the kernel into the main process: expose `validatePackage`, `loadPackage`, `startRun`, `resumeRun`, `getRun`, `getAuditTrail` over IPC | Renderer can list a loaded package's agents/workflows |
 | 2.1.4 | Add a `contextBridge` preload with a minimal, allow-listed API surface (no `nodeIntegration`) | Security checklist passes: renderer has no direct Node access |
 | 2.1.5 | Add desktop package to root `pnpm build` / `pnpm lint` / CI | Fresh clone builds everything with one command |
+| 2.1.6 | Identity (I.6): main process hosts sign-in via `packages/identity` — dev identity by default, OIDC authorization-code + PKCE when an `identity.schema.json`-validated config is provided; expose `signIn`, `signOut`, `getCurrentUser` over IPC | UI shows the signed-in user; every `resumeRun` call carries the session's `Principal`; tokens never cross the IPC bridge |
 
 **📚 Learn while you build — Electron process model & IPC security**
 
@@ -72,9 +78,9 @@ broad-but-shallow UI over everything.
 | --- | --- | --- |
 | 2.3.1 | "Start workflow" screen: choose workflow, choose model provider (mock/Ollama/OpenAI-compatible) per model tier | A run starts and appears in a run list |
 | 2.3.2 | Run view: live node-by-node progress (which agent is working, which node is `waitingForHuman`) | Status updates without manual refresh |
-| 2.3.3 | Human-input node UI: render the node's `prompt`, collect the teacher's answer, resume the run | The `create-assignment` step of the assignment workflow works end-to-end |
-| 2.3.4 | Human-approval node UI: show the `subject` (e.g. proposed marks), approve / reject with reason | Rejection reason lands in workflow state and the audit trail |
-| 2.3.5 | Retry/failure surfacing: show attempt counts and terminal failures with the error | A failing mock provider produces a readable failure card |
+| 2.3.3 | Human-input node UI: render the node's `prompt`, collect the teacher's answer, resume the run with the signed-in teacher's `Principal` | The `create-assignment` step of the assignment workflow works end-to-end |
+| 2.3.4 | Human-approval node UI: show the `subject` (e.g. proposed marks), approve / reject with reason, resuming with the approver's `Principal` | Rejection reason lands in workflow state and the audit trail |
+| 2.3.5 | Retry/failure surfacing: show attempt counts and terminal failures with the error; surface `workflow.authorization.denied` (wrong role / wrong participant) as a distinct, readable card | A failing mock provider produces a readable failure card; an unauthorized resume shows who was denied and why |
 
 **📚 Learn while you build — human-in-the-loop workflow engines**
 
@@ -94,16 +100,17 @@ broad-but-shallow UI over everything.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 2.4.1 | Role selection / simple profile switch (teacher vs learner) — local only, no auth service yet | Portals show only the human tasks for their role |
-| 2.4.2 | Learner task inbox: pending `humanInput` nodes where `role == "learner"` (e.g. "submit your work") | Submitting resumes the run |
+| 2.4.1 | Portals keyed to the signed-in identity: the learner portal shows only human tasks whose node `role` maps to one of the current `Principal`'s roles (dev identity provides one user per role locally; real users come from the configured OIDC provider) | Portals show only the human tasks for the signed-in user's roles; switching users switches portals |
+| 2.4.2 | Learner task inbox: pending `humanInput` nodes where `role == "learner"` (e.g. "submit your work") | Submitting resumes the run with the learner's `Principal`; per-run participant binding means only the learner who submitted may resubmit |
 | 2.4.3 | Feedback view: rendered feedback + score once the workflow completes, with "why?" linking to audit records | Learner can see evidence and rubric section behind their mark |
 
 **📚 Learn while you build — roles and authorisation**
 
-- Filtering tasks by the node's `role` field is **role-based access control (RBAC)** in miniature.
-  We deliberately start with local role switching to keep the slice thin; real identity comes
-  later. The lesson: separate *authentication* (who are you) from *authorisation* (what may you
-  do) — the workflow schema already encodes the authorisation side.
+- Filtering tasks by the node's `role` field is **role-based access control (RBAC)**. Since
+  ADR-0010 the kernel enforces it for real: the engine checks the `Principal`'s roles and per-run
+  participant bindings on every resume, so the portal filter is a *convenience*, not the security
+  boundary. The lesson: separate *authentication* (who are you — `packages/identity`) from
+  *authorisation* (what may you do — the workflow engine); the UI must never re-implement either.
 - The "why?" link is **explainability by construction**: because audit is runtime-enforced (design
   rule 4), the UI never has to reconstruct an explanation — it just renders records that already exist.
 
@@ -114,6 +121,7 @@ broad-but-shallow UI over everything.
 | 2.5.1 | Audit trail screen per run: chronological records with agent, action, prompt version, model, evidence, score, confidence | Every agent step in a run is visible |
 | 2.5.2 | Hash-chain verification button: recompute the chain and show valid/tampered | Editing a record on disk makes verification fail visibly |
 | 2.5.3 | Filter by agent / node / human overrides; export a run's trail to JSON | Exported file re-verifies with the CLI |
+| 2.5.4 | Identity (I.8, first slice): per-user audit view built on `IdentityService.auditTrailForUser` — who did what, as which role, asserted by which provider; includes `identity.*` and `workflow.authorization.denied` events | Admin can trace any human action in a run back to an authenticated principal |
 
 **📚 Learn while you build — tamper-evident logs**
 
@@ -129,6 +137,8 @@ broad-but-shallow UI over everything.
 - One command starts the desktop app; installing `fixtures/Grade7-Maths.workforce` and running the
   assignment workflow end-to-end works with the mock provider and with Ollama.
 - Zero domain knowledge in the UI code — verified by rendering a second (even trivial) package.
+- Every human step in the UI is performed by an authenticated `Principal` (dev identity or OIDC);
+  the renderer never sees tokens, and an unauthorized action produces an audited denial (ADR-0010).
 - Existing kernel tests still pass; new UI-level smoke test (Playwright or Vitest + Electron) covers
   the vertical slice.
 
@@ -330,13 +340,13 @@ Shipped in the kernel (this phase-0/1 slice):
 | I.4 | Engine enforcement — `WorkflowEngine.resume` requires a `Principal`, checks the node role, binds roles per run, audits `workflow.authorization.denied` | Grade7-Maths tests prove a student cannot approve and a teacher cannot submit student work ✔ |
 | I.5 | CLI wiring — dev identity by default; `--identity <config.json>` signs users in via the OIDC device flow | `flowforge run … --identity` completes a device-flow login ✔ |
 
-Follow-up work (slot into the phases below):
+Follow-up work (slotted into the phases above):
 
 | # | Task | Done when |
 | --- | --- | --- |
-| I.6 | Desktop app login via authorization-code + PKCE (Milestone 2.1+) | UI shows the signed-in user; every human step passes the Principal |
+| I.6 | Desktop app login via authorization-code + PKCE (Task 2.1.6) | UI shows the signed-in user; every human step passes the Principal |
 | I.7 | Persistent `SessionStore` implementation (with 4.3's persistence substrate) | Sessions survive restart; revocation works across nodes |
-| I.8 | Admin governance UI — role-mapping management, session policy, per-user audit trail (builds on `IdentityService.auditTrailForUser`) (Milestone 2.5+) | Admin can review who did what, as which role, asserted by which provider |
+| I.8 | Admin governance UI — role-mapping management, session policy, per-user audit trail (builds on `IdentityService.auditTrailForUser`) (first slice in Task 2.5.4; full management UI after Milestone 2.5) | Admin can review who did what, as which role, asserted by which provider |
 
 ---
 
