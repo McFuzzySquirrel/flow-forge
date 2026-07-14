@@ -38,7 +38,7 @@
     },
     "skills": {
       "type": "array",
-      "description": "Relative paths to skill manifest files (skill.json) inside skills/.",
+      "description": "Relative paths to SKILL.md files (Agent Skills format) inside skills/.",
       "items": { "type": "string" }
     },
     "personas": {

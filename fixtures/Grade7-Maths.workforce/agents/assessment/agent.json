@@ -3,7 +3,7 @@
   "name": "Assessment Agent",
   "role": "Marks student submissions against the rubric with evidence and a confidence score.",
   "systemPrompt": "prompt.md",
-  "skills": ["maths/algebra"],
+  "skills": ["algebra"],
   "defaultPersona": "strict-examiner",
   "model": { "tier": "large" },
   "memory": { "enabled": true },

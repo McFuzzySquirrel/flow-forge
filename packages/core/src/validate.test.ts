@@ -50,6 +50,20 @@ describe('core schema validation', () => {
     expect(validate('agent', { id: 'BadId!', name: 'x', role: 'y', model: { tier: 'large' } }).valid).toBe(false);
   });
 
+  it('validates skill frontmatter (Agent Skills format)', () => {
+    expect(
+      validate('skill', {
+        name: 'algebra',
+        description: 'Linear equations at Grade 7 level.',
+        version: '1.0.0',
+        metadata: { displayName: 'Grade 7 Algebra', prompts: ['prompts.md'] }
+      }).valid
+    ).toBe(true);
+    expect(validate('skill', { name: 'Bad Name!', description: 'x' }).valid).toBe(false);
+    expect(validate('skill', { name: 'algebra' }).valid).toBe(false);
+    expect(validate('skill', { name: 'algebra', description: 'x', prompts: [] }).valid).toBe(false);
+  });
+
   it('validates workflow node discriminators', () => {
     const wf = {
       id: 'main',

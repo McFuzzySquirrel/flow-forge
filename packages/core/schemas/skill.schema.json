@@ -1,51 +1,66 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://flowforge.dev/schemas/skill.schema.json",
-  "title": "Skill Manifest",
-  "description": "Formal contract for a skill plug-in folder (skill.json alongside skills.md, prompts and tools). Skills are validatable, composable and swappable units of domain knowledge.",
+  "title": "Skill Frontmatter",
+  "description": "Validates the parsed YAML frontmatter of a SKILL.md file (agentskills.io Agent Skills convention). The Markdown body of SKILL.md is the skill's instructions. FlowForge-specific fields live under 'metadata'.",
   "type": "object",
-  "required": ["id", "name", "version"],
+  "required": ["name", "description"],
   "additionalProperties": false,
   "properties": {
-    "id": {
+    "name": {
       "type": "string",
-      "pattern": "^[a-z0-9]+([./-][a-z0-9]+)*$",
-      "description": "Package-unique skill id, e.g. 'maths/algebra'."
+      "maxLength": 64,
+      "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$",
+      "description": "Skill identifier: lowercase letters, digits and hyphens, matching the skill folder name. Agents reference skills by this name."
     },
-    "name": { "type": "string", "minLength": 1 },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "What the skill does and when to use it."
+    },
     "version": {
       "type": "string",
       "pattern": "^\\d+\\.\\d+\\.\\d+(-[0-9A-Za-z.-]+)?$"
     },
-    "description": { "type": "string" },
-    "instructions": {
-      "type": "string",
-      "description": "Relative path to the skills.md instructions document.",
-      "default": "skills.md"
-    },
-    "prompts": {
+    "license": { "type": "string" },
+    "allowed-tools": {
       "type": "array",
-      "description": "Relative paths to prompt fragment files contributed by this skill.",
+      "description": "Tools the skill is allowed to use (Agent Skills spec field).",
       "items": { "type": "string" }
     },
-    "tools": {
-      "type": "string",
-      "description": "Relative path to a tools.json declaring tools this skill provides."
-    },
-    "embeddings": {
-      "type": "array",
-      "description": "Relative paths of documents to embed into the memory of agents equipped with this skill.",
-      "items": { "type": "string" }
-    },
-    "dependencies": {
-      "type": "array",
-      "description": "Ids of skills this skill depends on.",
-      "items": { "type": "string" }
-    },
-    "compatibleAgents": {
-      "type": "array",
-      "description": "Agent ids or roles this skill is compatible with. Empty means any.",
-      "items": { "type": "string" }
+    "metadata": {
+      "type": "object",
+      "description": "Open extension map. FlowForge-specific fields are defined here.",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Human-friendly skill name for UI display."
+        },
+        "prompts": {
+          "type": "array",
+          "description": "Relative paths to prompt fragment files contributed by this skill.",
+          "items": { "type": "string" }
+        },
+        "tools": {
+          "type": "string",
+          "description": "Relative path to a tools.json declaring tools this skill provides."
+        },
+        "embeddings": {
+          "type": "array",
+          "description": "Relative paths of documents to embed into the memory of agents equipped with this skill.",
+          "items": { "type": "string" }
+        },
+        "dependencies": {
+          "type": "array",
+          "description": "Names of skills this skill depends on.",
+          "items": { "type": "string" }
+        },
+        "compatibleAgents": {
+          "type": "array",
+          "description": "Agent ids or roles this skill is compatible with. Empty means any.",
+          "items": { "type": "string" }
+        }
+      }
     }
   }
 }

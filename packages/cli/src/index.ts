@@ -45,7 +45,10 @@ export function inspectCommand(packageDir: string): number {
       console.log(`  ${agent.id} (${agent.model.tier}) — ${agent.role}`);
     }
     console.log('\nSkills:');
-    for (const skill of pkg.skills.values()) console.log(`  ${skill.id} v${skill.version}`);
+    for (const skill of pkg.skills.values()) {
+      const { name, version, description } = skill.manifest;
+      console.log(`  ${name}${version ? ` v${version}` : ''} — ${description}`);
+    }
     console.log('\nPersonas:');
     for (const persona of pkg.personas.values()) console.log(`  ${persona.id} — ${persona.tone ?? ''}`);
     console.log('\nWorkflows:');

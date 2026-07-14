@@ -51,6 +51,17 @@ describe('AgentRuntime', () => {
     expect(seenPrompt).not.toContain('Strict Examiner');
   });
 
+  it('includes SKILL.md instructions in the system prompt', async () => {
+    let seenPrompt = '';
+    const { runtime } = makeRuntime((systemPrompt) => {
+      seenPrompt = systemPrompt;
+      return '{}';
+    });
+    await runtime.step({ agentId: 'assessment', action: 'Mark', inputs: {} });
+    expect(seenPrompt).toContain('Skill (Grade 7 Algebra)');
+    expect(seenPrompt).toContain('one- and two-step linear equations');
+  });
+
   it('includes recalled memory as evidence', async () => {
     const { runtime, memory, audit } = makeRuntime(() => '{}');
     await memory.remember(
