@@ -8,6 +8,7 @@ import type {
   WorkflowDefinition,
   WorkflowNode
 } from '@flowforge/core';
+import { principalActor } from '@flowforge/core';
 import { AuditLog } from '@flowforge/audit';
 import type { AgentRuntime } from '@flowforge/agents';
 
@@ -152,17 +153,12 @@ export class WorkflowEngine {
     }
     const node = this.node(workflow, run.currentNodeId);
     const { principal } = humanResponse;
-    const actor = {
-      type: 'human' as const,
-      id: principal.id,
-      provider: principal.provider,
-      roles: principal.roles
-    };
+    const actor = principalActor(principal);
 
     if (node.type !== 'humanInput' && node.type !== 'humanApproval') {
       throw new Error(`Node '${node.id}' is not a human step`);
     }
-    this.authorize(run, node.role, principal, actor);
+    this.authorize(run, node.role, principal);
     run.participants = { ...run.participants, [node.role]: principal.id };
 
     if (node.type === 'humanInput') {
@@ -196,12 +192,7 @@ export class WorkflowEngine {
   }
 
   /** Role check plus per-run participant binding; denials are audited. */
-  private authorize(
-    run: WorkflowRun,
-    role: string,
-    principal: Principal,
-    actor: { type: 'human'; id: string; provider?: string; roles?: string[] }
-  ): void {
+  private authorize(run: WorkflowRun, role: string, principal: Principal): void {
     let reason: string | undefined;
     if (!principal.roles.includes(role)) {
       reason = `principal does not hold role '${role}'`;
@@ -213,7 +204,7 @@ export class WorkflowEngine {
     }
     if (reason) {
       this.audit.record({
-        actor,
+        actor: principalActor(principal),
         action: 'workflow.authorization.denied',
         workflowRunId: run.id,
         nodeId: run.currentNodeId,

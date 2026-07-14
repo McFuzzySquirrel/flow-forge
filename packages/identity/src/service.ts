@@ -1,5 +1,5 @@
 import type { AuditRecord, IdentityConfig, Permission, Principal } from '@flowforge/core';
-import { validate } from '@flowforge/core';
+import { principalActor, validate } from '@flowforge/core';
 import { AuditLog } from '@flowforge/audit';
 import {
   MockIdentityProvider,
@@ -96,7 +96,7 @@ export class IdentityService {
     }
     const session = this.sessions.create(principal, tokens, this.sessionTtlMs);
     this.audit.record({
-      actor: this.actor(principal),
+      actor: principalActor(principal),
       action: 'identity.login',
       detail: { sessionId: session.id, expiresAt: new Date(session.expiresAt).toISOString() }
     });
@@ -118,7 +118,7 @@ export class IdentityService {
     this.sessions.revoke(sessionId);
     const renewed = this.sessions.create(session.principal, tokens, this.sessionTtlMs);
     this.audit.record({
-      actor: this.actor(session.principal),
+      actor: principalActor(session.principal),
       action: 'identity.refresh',
       detail: { previousSessionId: sessionId, sessionId: renewed.id }
     });
@@ -131,7 +131,7 @@ export class IdentityService {
     this.sessions.revoke(sessionId);
     if (session) {
       this.audit.record({
-        actor: this.actor(session.principal),
+        actor: principalActor(session.principal),
         action: 'identity.logout',
         detail: { sessionId }
       });
@@ -143,7 +143,7 @@ export class IdentityService {
     const granted = this.policy.granted(principal, permission);
     if (!granted) {
       this.audit.record({
-        actor: this.actor(principal),
+        actor: principalActor(principal),
         action: 'identity.permission.denied',
         detail: { permission }
       });
@@ -161,12 +161,4 @@ export class IdentityService {
     return structuredClone(this.config.roleMappings);
   }
 
-  private actor(principal: Principal) {
-    return {
-      type: 'human' as const,
-      id: principal.id,
-      provider: principal.provider,
-      roles: principal.roles
-    };
-  }
 }

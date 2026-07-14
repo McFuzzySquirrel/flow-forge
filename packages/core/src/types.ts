@@ -250,3 +250,13 @@ export interface IdentityConfig {
   permissions?: Record<string, Permission[]>;
   session?: { ttlSeconds?: number };
 }
+
+/** Build the audit actor entry for an authenticated principal (verified identity, ADR-0010). */
+export function principalActor(principal: Principal): AuditActor {
+  return {
+    type: 'human',
+    id: principal.id,
+    provider: principal.provider,
+    roles: principal.roles
+  };
+}

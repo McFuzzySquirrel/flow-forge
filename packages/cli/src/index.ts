@@ -133,6 +133,10 @@ export async function runCommand(
   const identityConfig = options.identityConfigPath
     ? (JSON.parse(readFileSync(options.identityConfigPath, 'utf8')) as IdentityConfig)
     : undefined;
+  if (identityConfig && identityConfig.providers.length === 0) {
+    console.error('✘ Identity configuration must enable at least one provider');
+    return 1;
+  }
   const identity = identityConfig
     ? IdentityService.fromConfig(identityConfig, audit)
     : devIdentityService(audit, workflowRoles);
