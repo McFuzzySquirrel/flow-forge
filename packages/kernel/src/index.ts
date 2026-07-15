@@ -323,7 +323,8 @@ export class FlowForgeKernel implements KernelApi {
   // ---- Persistence --------------------------------------------------------
 
   private dataFilePath(name: string): string {
-    return join(this.dataDir!, name);
+    if (!this.dataDir) throw new Error('dataFilePath called without a dataDir configured');
+    return join(this.dataDir, name);
   }
 
   private readJsonFile<T>(name: string, fallback: T): T {

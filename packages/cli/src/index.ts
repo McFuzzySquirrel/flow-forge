@@ -219,7 +219,7 @@ export async function runCommand(
     }
 
     // Use next scripted answer if available, otherwise prompt interactively.
-    const answer = answers[answerIndex++];
+    const answer = answerIndex < answers.length ? answers[answerIndex++] : undefined;
 
     if (pending.kind === 'input') {
       const value =
@@ -370,13 +370,11 @@ export function auditExportCommand(options: {
 
 export async function memoryListCommand(
   namespace: string,
-  options: { dataDir?: string }
+  // dataDir is accepted for API consistency; memory persistence requires the Chroma
+  // VectorStore adapter (Phase 3, Milestone 3.3 — ADR-0011). Until then this command
+  // operates on an in-memory store within the current process.
+  _options: { dataDir?: string }
 ): Promise<number> {
-  // Memory is per-kernel-instance (in-memory or backed by a future VectorStore
-  // adapter — Phase 3, ADR-0011).  For now this command reads from the
-  // in-memory store of a fresh kernel; cross-process persistence requires the
-  // Chroma adapter (Milestone 3.3).
-  void options;
   const memory = new MemoryService();
   const items = await memory.list(namespace);
   if (items.length === 0) {
@@ -392,9 +390,9 @@ export async function memoryListCommand(
 export async function memoryDeleteCommand(
   namespace: string,
   itemId: string,
-  options: { dataDir?: string }
+  // dataDir is accepted for API consistency; see memoryListCommand note above.
+  _options: { dataDir?: string }
 ): Promise<number> {
-  void options;
   const memory = new MemoryService();
   await memory.forget(namespace, itemId);
   console.log(`✔ Deleted item '${itemId}' from namespace '${namespace}'.`);
