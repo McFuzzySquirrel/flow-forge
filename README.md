@@ -46,6 +46,10 @@ node packages/cli/dist/index.js inspect fixtures/Grade7-Maths.workforce
 
 # run the assignment workflow headlessly (mock model, interactive human steps)
 node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment --mock
+
+# try the desktop shell (Phase 2, Milestone 2.1): load the reference package,
+# sign in as a role (dev identity), run the assignment workflow, inspect the audit trail
+pnpm --filter @flowforge/desktop dev
 ```
 
 ## Design rules
@@ -69,6 +73,6 @@ it proves before the UI phase — see [docs/phase-1-kernel-architecture.md](docs
 
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
-- **Phase 2 — Vertical slice UI** — Electron + React shell, teacher & learner portals, audit viewer
+- **Phase 2 — Vertical slice UI** 🚧 in progress — Milestone 2.1 (Electron + React shell, typed IPC, dev-identity sign-in) ✅; next: package installation & workforce home, teacher & learner portals, audit viewer
 - **Phase 3 — Differentiators** — persona picker, Coach & Reflection agents, long-term memory in anger, visual workflow editor
 - **Phase 4 — Ecosystem** — package export/signing, second domain package, Dapr Workflows runner

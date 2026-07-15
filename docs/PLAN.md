@@ -12,6 +12,20 @@ companion.
 sessions, and `WorkflowEngine.resume` now requires an authenticated `Principal` with role checks
 and per-run participant binding (tasks I.1–I.5 below).
 
+**Phase 2 is now in progress.** Milestone 2.1 (application shell & IPC bridge) has landed:
+`packages/desktop` is an Electron + Vite/React app with a typed IPC contract (`src/ipc.ts`), an
+Electron-free `DesktopKernel` bridge (`src/kernel.ts`, unit-tested), a `contextBridge` preload with
+no `nodeIntegration`, and dev-identity sign-in (one mock user per workflow role — the dev-identity
+slice of Task 2.1.6 / I.6; OIDC authorization-code + PKCE is still to come). The desktop package is
+part of the root `pnpm build` / `pnpm lint` / CI pipeline. **Next up is Milestone 2.2** (package
+installation & workforce home).
+
+**Try the current slice:** after `pnpm install && pnpm build`, run
+`pnpm --filter @flowforge/desktop dev` to open the desktop shell. Enter the path to
+`fixtures/Grade7-Maths.workforce`, load it, sign in as a role (e.g. `teacher` or `learner`), start
+the `assignment` workflow, answer the human-input/approval steps, and watch the audit trail update.
+An unauthorized action (e.g. a learner approving) surfaces as an audited denial.
+
 **Design rules that govern everything below** (see README):
 
 1. Schemas first — nothing consumes a format without a validating schema.
@@ -34,12 +48,12 @@ broad-but-shallow UI over everything.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 2.1.1 | Scaffold `packages/desktop` (Electron main process + Vite/React renderer) in the pnpm workspace | `pnpm --filter @flowforge/desktop dev` opens an empty window |
-| 2.1.2 | Define a typed IPC contract (`packages/desktop/src/ipc.ts`) — request/response types shared between main and renderer | Renderer calls are fully typed; no `any` crosses the bridge |
-| 2.1.3 | Wire the kernel into the main process: expose `validatePackage`, `loadPackage`, `startRun`, `resumeRun`, `getRun`, `getAuditTrail` over IPC | Renderer can list a loaded package's agents/workflows |
-| 2.1.4 | Add a `contextBridge` preload with a minimal, allow-listed API surface (no `nodeIntegration`) | Security checklist passes: renderer has no direct Node access |
-| 2.1.5 | Add desktop package to root `pnpm build` / `pnpm lint` / CI | Fresh clone builds everything with one command |
-| 2.1.6 | Identity (I.6): main process hosts sign-in via `packages/identity` — dev identity by default, OIDC authorization-code + PKCE when an `identity.schema.json`-validated config is provided; expose `signIn`, `signOut`, `getCurrentUser` over IPC | UI shows the signed-in user; every `resumeRun` call carries the session's `Principal`; tokens never cross the IPC bridge |
+| 2.1.1 | Scaffold `packages/desktop` (Electron main process + Vite/React renderer) in the pnpm workspace | `pnpm --filter @flowforge/desktop dev` opens an empty window ✔ |
+| 2.1.2 | Define a typed IPC contract (`packages/desktop/src/ipc.ts`) — request/response types shared between main and renderer | Renderer calls are fully typed; no `any` crosses the bridge ✔ |
+| 2.1.3 | Wire the kernel into the main process: expose `validatePackage`, `loadPackage`, `startRun`, `resumeRun`, `getRun`, `getAuditTrail` over IPC | Renderer can list a loaded package's agents/workflows ✔ |
+| 2.1.4 | Add a `contextBridge` preload with a minimal, allow-listed API surface (no `nodeIntegration`) | Security checklist passes: renderer has no direct Node access ✔ |
+| 2.1.5 | Add desktop package to root `pnpm build` / `pnpm lint` / CI | Fresh clone builds everything with one command ✔ |
+| 2.1.6 | Identity (I.6): main process hosts sign-in via `packages/identity` — dev identity by default, OIDC authorization-code + PKCE when an `identity.schema.json`-validated config is provided; expose `signIn`, `signOut`, `getCurrentUser` over IPC | UI shows the signed-in user; every `resumeRun` call carries the session's `Principal`; tokens never cross the IPC bridge — ✔ dev-identity slice shipped; OIDC + PKCE pending |
 
 **📚 Learn while you build — Electron process model & IPC security**
 
