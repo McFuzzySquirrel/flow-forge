@@ -71,6 +71,9 @@ concepts behind each milestone — lives in [docs/PLAN.md](docs/PLAN.md).
 For a detailed view of the current Phase 1/kernel branch — including what you can run today and what
 it proves before the UI phase — see [docs/phase-1-kernel-architecture.md](docs/phase-1-kernel-architecture.md).
 
+For the desktop shell pages architecture, planned Phase 5 screens, and a full explanation of how
+LLMs are integrated — see [docs/pages-architecture.md](docs/pages-architecture.md).
+
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
 - **Phase 2 — Vertical slice UI** 🚧 in progress — Milestone 2.1 (Electron + React shell, typed IPC, dev-identity sign-in) ✅; next: package installation & workforce home, teacher & learner portals, audit viewer

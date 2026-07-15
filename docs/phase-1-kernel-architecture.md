@@ -112,6 +112,11 @@ The branch already has executable proof points:
 Those commands demonstrate that the monorepo builds, the kernel tests pass, the fixture package is
 valid, and the reference workflow can run with interactive human pauses and a mock model provider.
 
+## Further reading
+
+- [Pages architecture & LLM integration](pages-architecture.md) — desktop shell layers, current
+  sections, planned Phase 5 pages, and a full explanation of how LLMs are invoked and audited.
+
 ## Constraints that should carry into Phase 2
 
 Phase 2 should preserve these properties:
