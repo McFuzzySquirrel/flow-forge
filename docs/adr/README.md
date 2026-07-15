@@ -19,6 +19,7 @@ consequences — so future contributors can understand *why* the system is the w
 | [0008](0008-pnpm-typescript-monorepo.md) | pnpm + TypeScript monorepo tooling | Accepted |
 | [0009](0009-agent-skills-skill-md-format.md) | Adopt the Agent Skills SKILL.md format for skills | Accepted |
 | [0010](0010-oidc-identity-and-role-based-authorization.md) | OIDC identity and role-based authorization | Accepted |
+| [0011](0011-terminal-first-ui-deferred.md) | Terminal-first development; UI layer deferred to Phase 5 | Accepted |
 
 ## Process
 

@@ -1,12 +1,9 @@
 {
-  "name": "@flowforge/cli",
+  "name": "@flowforge/kernel",
   "version": "0.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "flowforge": "dist/index.js"
-  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -16,7 +13,6 @@
     "@flowforge/audit": "workspace:*",
     "@flowforge/core": "workspace:*",
     "@flowforge/identity": "workspace:*",
-    "@flowforge/kernel": "workspace:*",
     "@flowforge/memory": "workspace:*",
     "@flowforge/packages": "workspace:*",
     "@flowforge/workflow": "workspace:*"

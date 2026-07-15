@@ -76,6 +76,9 @@ importers:
       '@flowforge/identity':
         specifier: workspace:*
         version: link:../identity
+      '@flowforge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@flowforge/memory':
         specifier: workspace:*
         version: link:../memory
@@ -123,6 +126,9 @@ importers:
       '@flowforge/identity':
         specifier: workspace:*
         version: link:../identity
+      '@flowforge/kernel':
+        specifier: workspace:*
+        version: link:../kernel
       '@flowforge/memory':
         specifier: workspace:*
         version: link:../memory
@@ -169,6 +175,37 @@ importers:
       '@flowforge/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^22
+        version: 22.20.1
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/kernel:
+    dependencies:
+      '@flowforge/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@flowforge/audit':
+        specifier: workspace:*
+        version: link:../audit
+      '@flowforge/core':
+        specifier: workspace:*
+        version: link:../core
+      '@flowforge/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@flowforge/memory':
+        specifier: workspace:*
+        version: link:../memory
+      '@flowforge/packages':
+        specifier: workspace:*
+        version: link:../workforce-packages
+      '@flowforge/workflow':
+        specifier: workspace:*
+        version: link:../workflow
     devDependencies:
       '@types/node':
         specifier: ^22

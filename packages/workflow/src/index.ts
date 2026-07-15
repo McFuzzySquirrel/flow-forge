@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
   AgentNode,
   BranchNode,
@@ -56,6 +58,23 @@ export class InMemoryStateStore implements StateStore {
   load(runId: string): WorkflowRun | undefined {
     const run = this.runs.get(runId);
     return run ? structuredClone(run) : undefined;
+  }
+}
+
+/** File-backed state store: persists each run as a JSON file in a directory. */
+export class FileStateStore implements StateStore {
+  constructor(private readonly dir: string) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  save(run: WorkflowRun): void {
+    writeFileSync(join(this.dir, `${run.id}.json`), JSON.stringify(run), 'utf8');
+  }
+
+  load(runId: string): WorkflowRun | undefined {
+    const path = join(this.dir, `${runId}.json`);
+    if (!existsSync(path)) return undefined;
+    return JSON.parse(readFileSync(path, 'utf8')) as WorkflowRun;
   }
 }
 
