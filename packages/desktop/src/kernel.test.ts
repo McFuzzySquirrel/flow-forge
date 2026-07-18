@@ -66,7 +66,7 @@ describe('DesktopKernel', () => {
           : await kernel.resumeRun(run.id, { approved: true, reason: 'looks good' });
     }
     expect(run.status).toBe('completed');
-    const trail = kernel.getAuditTrail(run.id);
+    const trail = kernel.getAuditTrail({ runId: run.id });
     expect(trail.chainIntact).toBe(true);
     expect(trail.records.length).toBeGreaterThan(0);
     expect(trail.records.some((record) => record.action === 'identity.login')).toBe(false); // login records have no runId

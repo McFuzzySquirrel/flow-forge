@@ -24,7 +24,9 @@ export function registerIpcHandlers(kernel: DesktopKernel): void {
     kernel.resumeRun(runId, response)
   );
   ipcMain.handle(IpcChannels.getRun, (_event, runId: string) => kernel.getRun(runId));
-  ipcMain.handle(IpcChannels.getAuditTrail, (_event, runId?: string) => kernel.getAuditTrail(runId));
+  ipcMain.handle(IpcChannels.getAuditTrail, (_event, runId?: string) =>
+    kernel.getAuditTrail(runId ? { runId } : undefined)
+  );
   ipcMain.handle(IpcChannels.signIn, (_event, role: string) => kernel.signIn(role));
   ipcMain.handle(IpcChannels.signOut, () => kernel.signOut());
   ipcMain.handle(IpcChannels.getCurrentUser, () => kernel.getCurrentUser());

@@ -15,6 +15,7 @@
     "@flowforge/audit": "workspace:*",
     "@flowforge/core": "workspace:*",
     "@flowforge/identity": "workspace:*",
+    "@flowforge/kernel": "workspace:*",
     "@flowforge/memory": "workspace:*",
     "@flowforge/packages": "workspace:*",
     "@flowforge/workflow": "workspace:*"
