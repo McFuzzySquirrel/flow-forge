@@ -5,36 +5,35 @@ milestones and tasks, and every milestone includes a **📚 Learn while you buil
 explains the concepts, patterns and trade-offs involved — so the plan doubles as a learning
 companion.
 
-**Where we are:** Phase 0 (Foundations) and Phase 1 (Kernel) are complete. The monorepo builds
+**Where we are:** Phase 0 (Foundations), Phase 1 (Kernel), Phase 2 (Headless completeness & kernel API hardening), and most of Phase 3 (Differentiators) are complete. The monorepo builds
 (`pnpm build`), tests pass (`pnpm test`), and the CLI can validate, inspect and headlessly run the
 `Grade7-Maths.workforce` reference package with the mock model provider. The identity kernel
 (ADR-0010) has also landed: `packages/identity` provides OIDC sign-in, claim-to-role mapping and
 sessions, and `WorkflowEngine.resume` now requires an authenticated `Principal` with role checks
-and per-run participant binding (tasks I.1–I.5 below).
+and per-run participant binding (tasks I.1–I.5 below). Phase 3 milestones 3.1 (persona
+enforcement), 3.2 (Coach & Reflection agents), 3.3.2 (memory write policy) and 3.4 (graph
+validation) are shipped; the remaining Phase 3 item is Milestone 3.3 (Chroma VectorStore adapter
+and supporting memory features).
 
-**Phase 2 is now revised (see ADR-0011).** The original "Vertical Slice UI" phase has been
-replaced by **Headless completeness & kernel API hardening**. The decision: defer all UI work to
-Phase 5, prove the kernel contract first through the CLI and two domain packages. Milestone 2.1
-(application shell & IPC bridge) has already landed as a foundation for the eventual UI:
-`packages/desktop` is an Electron + Vite/React app with a typed IPC contract (`src/ipc.ts`), an
-Electron-free kernel bridge (`src/kernel.ts` — now delegating to `@flowforge/kernel`), a
-`contextBridge` preload with no `nodeIntegration`, and dev-identity sign-in. The desktop package
-remains buildable but receives no new screens until Phase 5. **Next up is completing Milestone 2.2**
-(persistent package registry and run persistence) and the remaining CLI upgrades (2.3).
+**Phase 2 is complete (see ADR-0011).** The original "Vertical Slice UI" phase was replaced by
+**Headless completeness & kernel API hardening** — all milestones landed. Phase 3 differentiator
+features have now shipped — persona enforcement, Coach/Reflection agents in the Grade7-Maths
+fixture, declarative memory write policy, and `flowforge validate --graph` for reachability
+checks. The Electron shell stays buildable but receives no new screens until Phase 5.
+**Next up is completing Milestone 3.3** (Chroma/real-embeddings VectorStore adapter, namespace
+isolation tests, and retention/decay knobs), then Phase 4.
 
 **Try the current slice:** after `pnpm install && pnpm build`:
 - `flowforge validate fixtures/Grade7-Maths.workforce` — validate the reference package
-- `flowforge inspect fixtures/Grade7-Maths.workforce` — show agents, skills, workflows
+- `flowforge validate fixtures/Grade7-Maths.workforce --graph` — also check workflow graph reachability
+- `flowforge inspect fixtures/Grade7-Maths.workforce` — show agents, skills, personas, workflows
 - `flowforge run fixtures/Grade7-Maths.workforce assignment --mock` — interactive run via stdin
 - `flowforge run fixtures/Grade7-Maths.workforce assignment --mock --answers answers.json` — non-interactive CI run
+- `flowforge run fixtures/Grade7-Maths.workforce assignment --mock --persona supportive-mentor` — run with a specific persona
+- `flowforge run fixtures/Grade7-Maths.workforce revision --mock --answers answers.json` — run the Coach/Reflection revision workflow
 - `flowforge runs list` — list persisted runs (from `~/.flowforge`)
 - `flowforge audit show` — view audit records; `audit verify` checks chain integrity
-
-**Try the current slice:** after `pnpm install && pnpm build`, run
-`pnpm --filter @flowforge/desktop dev` to open the desktop shell. Enter the path to
-`fixtures/Grade7-Maths.workforce`, load it, sign in as a role (e.g. `teacher` or `learner`), start
-the `assignment` workflow, answer the human-input/approval steps, and watch the audit trail update.
-An unauthorized action (e.g. a learner approving) surfaces as an audited denial.
+- `flowforge audit show --run <a> --run <b>` — A/B compare personas and scores across two runs
 
 **Design rules that govern everything below** (see README):
 
@@ -189,10 +188,10 @@ expression of each feature ships in Phase 5.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 3.1.1 | Extend the agent runtime to compose system prompts as *capability (skill) + persona overlay*, with the persona layer clearly delimited | Prompt assembly is unit-tested; audit records capture persona id + version |
-| 3.1.2 | Persona selection in `flowforge run` via `--persona <id>` flag per agent node | Same Assessment agent runs as "Supportive Mentor" vs "Strict Examiner" with visibly different feedback |
-| 3.1.3 | Persona decision-policy hooks: thresholds/settings a persona can adjust (e.g. strictness affects approval routing), schema-validated | Policy values come from `persona.schema.json`-validated data, not code |
-| 3.1.4 | A/B run comparison: `flowforge audit show --run <a> --run <b>` diffs two runs' audit trails | CLI output shows personas used and score deltas between runs |
+| 3.1.1 | Extend the agent runtime to compose system prompts as *capability (skill) + persona overlay*, with the persona layer clearly delimited | Prompt assembly is unit-tested; audit records capture persona id + version ✔ |
+| 3.1.2 | Persona selection in `flowforge run` via `--persona <id>` flag per agent node | Same Assessment agent runs as "Supportive Mentor" vs "Strict Examiner" with visibly different feedback ✔ |
+| 3.1.3 | Persona decision-policy hooks: thresholds/settings a persona can adjust (e.g. strictness affects approval routing), schema-validated | Policy values come from `persona.schema.json`-validated data, not code ✔ |
+| 3.1.4 | A/B run comparison: `flowforge audit show --run <a> --run <b>` diffs two runs' audit trails | CLI output shows personas used and score deltas between runs ✔ |
 
 **📚 Learn while you build — prompt layering & separation of concerns**
 
@@ -207,10 +206,10 @@ expression of each feature ships in Phase 5.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 3.2.1 | Add Coach and Reflection agent definitions, skills and prompts to the Grade7-Maths fixture (platform code unchanged) | `flowforge validate` passes; agents appear in the roster with zero code changes |
-| 3.2.2 | New `revision` workflow: after feedback, Coach proposes practice steps; learner works through them; Reflection agent summarises what the learner should internalise | Workflow runs headlessly via CLI (`--answers`) with zero code changes |
-| 3.2.3 | Coach reads the learner-relevant memory namespace to personalise suggestions ("you struggled with fractions last time") | Suggestions demonstrably change based on stored memory |
-| 3.2.4 | Reflection agent writes distilled takeaways back to memory (not raw transcripts) | Memory grows with summaries, not noise |
+| 3.2.1 | Add Coach and Reflection agent definitions, skills and prompts to the Grade7-Maths fixture (platform code unchanged) | `flowforge validate` passes; agents appear in the roster with zero code changes ✔ |
+| 3.2.2 | New `revision` workflow: after feedback, Coach proposes practice steps; learner works through them; Reflection agent summarises what the learner should internalise | Workflow runs headlessly via CLI (`--answers`) with zero code changes ✔ |
+| 3.2.3 | Coach reads the learner-relevant memory namespace to personalise suggestions ("you struggled with fractions last time") | Suggestions demonstrably change based on stored memory ✔ |
+| 3.2.4 | Reflection agent writes distilled takeaways back to memory (not raw transcripts) | Memory grows with summaries, not noise ✔ |
 
 **📚 Learn while you build — multi-agent design & the reflection pattern**
 
@@ -231,7 +230,7 @@ expression of each feature ships in Phase 5.
 | # | Task | Done when |
 | --- | --- | --- |
 | 3.3.1 | Chroma (or equivalent) `VectorStore` adapter implementing the existing interface, with real embeddings via a `ModelProvider`-style embedding abstraction | In-memory and Chroma adapters pass the same interface test suite |
-| 3.3.2 | Memory write policy: what gets remembered after each workflow (per-agent, declared in the package) | Memory writes are declarative package config, not code |
+| 3.3.2 | Memory write policy: what gets remembered after each workflow (per-agent, declared in the package) | Memory writes are declarative package config, not code ✔ |
 | 3.3.3 | Memory inspector UI: browse a namespace, see items + metadata, delete items ("right to forget") | Deleting an item verifiably removes it from recall |
 | 3.3.4 | Namespace isolation tests: agent A can never recall agent B's memory; replacing an agent preserves others' memory | Isolation is enforced by tests, not convention |
 | 3.3.5 | Retention/decay knobs (max items, age-out) configurable per namespace | Old memory ages out per config |
@@ -258,8 +257,8 @@ The visual editor itself ships in Phase 5.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 3.4.1 | Graph-level checks in `flowforge validate --graph`: reachability from `start` (all nodes reachable), no dangling `next` references, every branch has a `default` condition | Invalid workflows are caught before `run`; exit code 1 on failure |
-| 3.4.2 | Expose graph validation in `KernelApi.validatePackage` result (add `graphErrors` field) | Any consumer (CLI, future UI) gets graph errors alongside schema errors |
+| 3.4.1 | Graph-level checks in `flowforge validate --graph`: reachability from `start` (all nodes reachable), no dangling `next` references, every branch has a `default` condition | Invalid workflows are caught before `run`; exit code 1 on failure ✔ |
+| 3.4.2 | Expose graph validation in `KernelApi.validatePackage` result (add `graphErrors` field) | Any consumer (CLI, future UI) gets graph errors alongside schema errors ✔ |
 
 **📚 Learn while you build — DSLs, graphs and static analysis**
 
