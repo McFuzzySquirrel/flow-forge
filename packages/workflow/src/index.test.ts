@@ -4,8 +4,8 @@ import { loadWorkforcePackage } from '@flowforge/packages';
 import { AuditLog } from '@flowforge/audit';
 import { MemoryService } from '@flowforge/memory';
 import { AgentRuntime, MockModelProvider, ModelRegistry } from '@flowforge/agents';
-import type { Principal } from '@flowforge/core';
-import { AuthorizationError, evaluateCondition, WorkflowEngine } from './index.js';
+import type { Principal, WorkflowDefinition } from '@flowforge/core';
+import { AuthorizationError, evaluateCondition, validateGraph, WorkflowEngine } from './index.js';
 
 const teacher: Principal = {
   id: 'teacher-1',
@@ -58,6 +58,73 @@ describe('evaluateCondition', () => {
     expect(evaluateCondition('score < 50', { score: 82 })).toBe(false);
     expect(evaluateCondition('assessment.score == 82', { assessment: { score: 82 } })).toBe(true);
     expect(evaluateCondition('default', {})).toBe(true);
+  });
+});
+
+describe('validateGraph', () => {
+  it('returns no errors for a valid workflow', () => {
+    const workflow: WorkflowDefinition = {
+      id: 'valid',
+      name: 'Valid',
+      start: 'start',
+      nodes: [
+        { id: 'start', type: 'agent', agent: 'planner', action: 'Plan', next: 'check' },
+        {
+          id: 'check',
+          type: 'branch',
+          conditions: [
+            { when: 'score >= 50', next: 'done' },
+            { when: 'default', next: 'done' }
+          ]
+        },
+        { id: 'done', type: 'end' }
+      ]
+    };
+
+    expect(validateGraph(workflow)).toEqual([]);
+  });
+
+  it('reports dangling node references', () => {
+    const workflow: WorkflowDefinition = {
+      id: 'dangling',
+      name: 'Dangling',
+      start: 'start',
+      nodes: [{ id: 'start', type: 'agent', agent: 'planner', action: 'Plan', next: 'missing' }]
+    };
+
+    expect(validateGraph(workflow)).toContain(`Node 'start' points to missing node 'missing'`);
+  });
+
+  it('reports unreachable nodes', () => {
+    const workflow: WorkflowDefinition = {
+      id: 'unreachable',
+      name: 'Unreachable',
+      start: 'start',
+      nodes: [
+        { id: 'start', type: 'end' },
+        { id: 'orphan', type: 'end' }
+      ]
+    };
+
+    expect(validateGraph(workflow)).toContain(`Node 'orphan' not reachable from start`);
+  });
+
+  it('reports branch nodes without a default condition', () => {
+    const workflow: WorkflowDefinition = {
+      id: 'branch',
+      name: 'Branch',
+      start: 'start',
+      nodes: [
+        {
+          id: 'start',
+          type: 'branch',
+          conditions: [{ when: 'score >= 50', next: 'done' }]
+        },
+        { id: 'done', type: 'end' }
+      ]
+    };
+
+    expect(validateGraph(workflow)).toContain(`Branch node 'start' is missing a default condition`);
   });
 });
 
@@ -206,5 +273,42 @@ describe('WorkflowEngine — Grade7-Maths end-to-end (Phase 1 milestone gate)', 
     expect(run.status).toBe('failed');
     const retries = audit.all().filter((r) => r.action === 'agent.step.retry');
     expect(retries).toHaveLength(2); // maxAttempts: 2 on the plan node
+  });
+
+  it('stores the run-level persona override on start', async () => {
+    const { pkg, engine } = makeEngine();
+    const workflow = pkg.workflows.get('assignment')!;
+
+    const run = await engine.start(workflow, { personaId: 'supportive-mentor' });
+
+    expect(run.runPersonaId).toBe('supportive-mentor');
+  });
+
+  it('evaluates branch conditions against persona policy', async () => {
+    const { engine } = makeEngine();
+    const workflow: WorkflowDefinition = {
+      id: 'persona-branch',
+      name: 'Persona Branch',
+      start: 'choose',
+      nodes: [
+        {
+          id: 'choose',
+          type: 'branch',
+          conditions: [
+            { when: '$persona.strictness == strict', next: 'strict-review' },
+            { when: 'default', next: 'general-review' }
+          ]
+        },
+        { id: 'strict-review', type: 'humanInput', role: 'teacher', output: 'review' },
+        { id: 'general-review', type: 'humanInput', role: 'student', output: 'review' }
+      ]
+    };
+
+    const run = await engine.start(workflow, {
+      personaId: 'strict-examiner',
+      personaPolicy: { strictness: 'strict' }
+    });
+
+    expect(run.pending).toMatchObject({ nodeId: 'strict-review', role: 'teacher' });
   });
 });

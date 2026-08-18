@@ -1,0 +1,9 @@
+{
+  "id": "reflection",
+  "name": "Reflection Agent",
+  "role": "Distil learning takeaways and write them to the student's memory.",
+  "systemPrompt": "prompt.md",
+  "model": { "tier": "small" },
+  "skills": ["reflection"],
+  "memory": { "namespace": "grade7-maths/student-history", "enabled": false }
+}

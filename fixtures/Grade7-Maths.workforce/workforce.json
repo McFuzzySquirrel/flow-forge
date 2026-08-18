@@ -12,11 +12,17 @@
     "agents/curriculum/agent.json",
     "agents/assessment/agent.json",
     "agents/feedback/agent.json",
-    "agents/teacher/agent.json"
+    "agents/teacher/agent.json",
+    "agents/coach/agent.json",
+    "agents/reflection/agent.json"
   ],
-  "skills": ["skills/maths/algebra/SKILL.md"],
+  "skills": [
+    "skills/maths/algebra/SKILL.md",
+    "skills/coaching/SKILL.md",
+    "skills/reflection/SKILL.md"
+  ],
   "personas": ["personas/supportive-mentor.json", "personas/strict-examiner.json"],
-  "workflows": ["workflows/assignment.json"],
+  "workflows": ["workflows/assignment.json", "workflows/revision.json"],
   "rubrics": ["rubrics/algebra-rubric.md"],
   "knowledge": [
     { "path": "knowledge/algebra-notes.md", "agents": ["curriculum", "assessment"] }

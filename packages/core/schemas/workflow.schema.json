@@ -68,6 +68,18 @@
                 "properties": {
                   "maxAttempts": { "type": "integer", "minimum": 1, "default": 1 }
                 }
+              },
+              "memoryWrite": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["text"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "namespace": { "type": "string" },
+                    "text": { "type": "string" }
+                  }
+                }
               }
             }
           }

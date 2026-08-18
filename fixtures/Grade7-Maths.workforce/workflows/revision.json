@@ -1,0 +1,51 @@
+{
+  "id": "revision",
+  "name": "Revision Cycle",
+  "description": "After feedback, the Coach proposes practice steps; the student works through them; the Reflection agent distils takeaways to memory.",
+  "start": "coach-review",
+  "state": {
+    "feedback": null,
+    "assessment": null,
+    "practicePlan": null,
+    "revisedWork": null,
+    "reflection": null
+  },
+  "nodes": [
+    {
+      "id": "coach-review",
+      "type": "agent",
+      "agent": "coach",
+      "action": "Study the feedback and assessment and propose personalised practice steps for the student.",
+      "inputs": ["feedback", "assessment"],
+      "output": "practicePlan",
+      "next": "student-revision"
+    },
+    {
+      "id": "student-revision",
+      "type": "humanInput",
+      "role": "student",
+      "prompt": "Work through the practice steps in your plan and submit your revised work.",
+      "output": "revisedWork",
+      "next": "reflect"
+    },
+    {
+      "id": "reflect",
+      "type": "agent",
+      "agent": "reflection",
+      "action": "Distil the key learning takeaways from this revision cycle.",
+      "inputs": ["assessment", "feedback", "revisedWork"],
+      "output": "reflection",
+      "memoryWrite": [
+        {
+          "namespace": "grade7-maths/student-history",
+          "text": "Revision cycle takeaway: {{reflection}}"
+        }
+      ],
+      "next": "done"
+    },
+    {
+      "id": "done",
+      "type": "end"
+    }
+  ]
+}

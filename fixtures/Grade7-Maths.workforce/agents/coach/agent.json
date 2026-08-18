@@ -1,0 +1,9 @@
+{
+  "id": "coach",
+  "name": "Learning Coach",
+  "role": "Personalise practice steps after feedback to help the student improve.",
+  "systemPrompt": "prompt.md",
+  "model": { "tier": "medium" },
+  "skills": ["coaching"],
+  "memory": { "namespace": "grade7-maths/student-history", "enabled": true }
+}

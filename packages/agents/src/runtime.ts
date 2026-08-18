@@ -137,4 +137,14 @@ export class AgentRuntime {
 
     return { output, raw: completion.content, model: completion.model, promptVersion, evidence };
   }
+
+  async writeMemory(agentId: string, text: string, namespace?: string): Promise<void> {
+    const agent = this.pkg.agents.get(agentId);
+    if (!agent) throw new Error(`Unknown agent '${agentId}'`);
+    const resolvedNamespace =
+      namespace ??
+      agent.memory?.namespace ??
+      MemoryService.namespace(this.pkg.manifest.id, agentId);
+    await this.memory.remember(resolvedNamespace, text);
+  }
 }

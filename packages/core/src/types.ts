@@ -108,6 +108,7 @@ export interface AgentNode extends WorkflowNodeBase {
   inputs?: string[];
   output?: string;
   retry?: { maxAttempts?: number };
+  memoryWrite?: Array<{ namespace?: string; text: string }>;
 }
 
 export interface HumanApprovalNode extends WorkflowNodeBase {
