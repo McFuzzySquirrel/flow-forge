@@ -1,19 +1,26 @@
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FlowForgeKernel } from './index.js';
 
 const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce', import.meta.url));
+const testDataRoot = fileURLToPath(new URL('../../../.test-artifacts/kernel/', import.meta.url));
 
 describe('FlowForgeKernel (in-memory)', () => {
   it('validates a package and reports errors for a missing directory', () => {
     const kernel = new FlowForgeKernel();
-    expect(kernel.validatePackage(fixture)).toEqual({ valid: true, errors: [] });
+    expect(kernel.validatePackage(fixture)).toEqual({ valid: true, errors: [], graphErrors: [] });
     const invalid = kernel.validatePackage('/nonexistent/package');
     expect(invalid.valid).toBe(false);
     expect(invalid.errors.length).toBeGreaterThan(0);
+  });
+
+  it('includes graphErrors for a valid package', () => {
+    const kernel = new FlowForgeKernel();
+    const result = kernel.validatePackage(fixture);
+
+    expect(result.graphErrors).toEqual([]);
   });
 
   it('loads a package and returns a serializable summary with a dir field', () => {
@@ -118,13 +125,27 @@ describe('FlowForgeKernel (in-memory)', () => {
     expect(run.status).toBe('completed');
     expect(kernel.getAuditTrail({ runId: run.id }).chainIntact).toBe(true);
   });
+
+  it('starts a run with a persona override', async () => {
+    const kernel = new FlowForgeKernel();
+    const pkg = kernel.loadPackage(fixture);
+
+    const run = await kernel.startRun(pkg.id, 'revision', { personaId: 'supportive-mentor' });
+
+    expect(run.runPersonaId).toBe('supportive-mentor');
+    const records = kernel.getAuditTrail({ runId: run.id }).records;
+    expect(records.find((record) => record.action === 'agent.step')?.actor.persona).toBe(
+      'supportive-mentor'
+    );
+  });
 });
 
 describe('FlowForgeKernel (file-backed persistence)', () => {
   let dataDir: string;
 
   beforeEach(() => {
-    dataDir = mkdtempSync(join(tmpdir(), 'flowforge-kernel-test-'));
+    dataDir = join(testDataRoot, `case-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dataDir, { recursive: true });
   });
 
   afterEach(() => {

@@ -7,7 +7,7 @@ const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce'
 describe('DesktopKernel', () => {
   it('validates a package and reports errors for a missing one', () => {
     const kernel = new DesktopKernel();
-    expect(kernel.validatePackage(fixture)).toEqual({ valid: true, errors: [] });
+    expect(kernel.validatePackage(fixture)).toEqual({ valid: true, errors: [], graphErrors: [] });
     const invalid = kernel.validatePackage('/nonexistent/package');
     expect(invalid.valid).toBe(false);
     expect(invalid.errors.length).toBeGreaterThan(0);

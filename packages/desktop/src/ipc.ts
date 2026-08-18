@@ -50,7 +50,7 @@ import type {
 export interface FlowForgeApi {
   validatePackage(packageDir: string): Promise<PackageValidationResult>;
   loadPackage(packageDir: string): Promise<PackageSummary>;
-  startRun(packageId: string, workflowId: string): Promise<RunSnapshot>;
+  startRun(packageId: string, workflowId: string, options?: { personaId?: string }): Promise<RunSnapshot>;
   resumeRun(runId: string, response: HumanResponse): Promise<RunSnapshot>;
   getRun(runId: string): Promise<RunSnapshot | undefined>;
   getAuditTrail(runId?: string): Promise<AuditTrailSnapshot>;

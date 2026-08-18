@@ -84,4 +84,15 @@ describe('AgentRuntime', () => {
       "Unknown agent 'nope'"
     );
   });
+
+  it('writes memory using the configured namespace', async () => {
+    const { runtime, memory } = makeRuntime(() => '{}');
+
+    await runtime.writeMemory('coach', 'Needs more practice with checking answers by substitution.');
+
+    const items = await memory.list('grade7-maths/student-history');
+    expect(items.map((item) => item.text)).toContain(
+      'Needs more practice with checking answers by substitution.'
+    );
+  });
 });

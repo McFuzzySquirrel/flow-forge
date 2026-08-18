@@ -6,9 +6,9 @@
  * future UI is also exercisable from a terminal or CI script.
  *
  * Commands:
- *   validate <package-dir>
+ *   validate <package-dir> [--graph]
  *   inspect  <package-dir>
- *   run      <package-dir> <workflow-id> [--mock] [--answers <file.json>] [--data-dir <dir>] [--identity <config.json>]
+ *   run      <package-dir> <workflow-id> [--mock] [--answers <file.json>] [--data-dir <dir>] [--identity <config.json>] [--persona <id>]
  *   runs     list  [--data-dir <dir>] [--package <id>]
  *   runs     show  <run-id> [--data-dir <dir>]
  *   audit    show  [--run <id>] [--actor <id>] [--action <action>] [--data-dir <dir>]
@@ -97,6 +97,25 @@ interface ScriptedAnswer {
 // ---------------------------------------------------------------------------
 
 export function validateCommand(packageDir: string): number {
+  return validateCommandWithOptions(packageDir);
+}
+
+export function validateCommandWithOptions(packageDir: string, options: { graph?: boolean } = {}): number {
+  if (options.graph) {
+    const kernel = new FlowForgeKernel();
+    const result = kernel.validatePackage(packageDir);
+    if (result.errors.length > 0) {
+      console.error(`✘ Package validation failed:`);
+      for (const detail of result.errors) console.error(`  - ${detail}`);
+    }
+    if (result.graphErrors.length > 0) {
+      console.error(`✘ Graph validation failed:`);
+      for (const detail of result.graphErrors) console.error(`  - ${detail}`);
+    } else if (result.valid) {
+      console.log('✔ No graph errors');
+    }
+    return result.valid ? 0 : 1;
+  }
   try {
     const pkg = loadWorkforcePackage(packageDir);
     console.log(`✔ ${pkg.manifest.name} v${pkg.manifest.version} (${pkg.manifest.id}) is valid`);
@@ -158,12 +177,18 @@ export async function runCommand(
     answersPath?: string;
     dataDir?: string;
     watch?: boolean;
+    persona?: string;
   } = {}
 ): Promise<number> {
   const pkg = loadWorkforcePackage(packageDir);
   const workflow = pkg.workflows.get(workflowId);
   if (!workflow) {
     console.error(`✘ Unknown workflow '${workflowId}'. Available: ${[...pkg.workflows.keys()].join(', ')}`);
+    return 1;
+  }
+  const persona = options.persona ? pkg.personas.get(options.persona) : undefined;
+  if (options.persona && !persona) {
+    console.error(`✘ Unknown persona '${options.persona}'. Available: ${[...pkg.personas.keys()].join(', ')}`);
     return 1;
   }
 
@@ -207,7 +232,17 @@ export async function runCommand(
     return principal;
   }
 
-  let run = await engine.start(workflow);
+  let run = await engine.start(
+    workflow,
+    options.persona
+      ? {
+          personaId: options.persona,
+          personaPolicy: persona?.decisionPolicy
+            ? ({ ...persona.decisionPolicy } as Record<string, unknown>)
+            : undefined
+        }
+      : undefined
+  );
   if (options.watch) console.log(`Run ${run.id} started (${run.status})`);
 
   while (run.status === 'waitingForHuman' && run.pending) {
@@ -308,19 +343,75 @@ export async function runsShowCommand(runId: string, options: { dataDir?: string
 
 export function auditShowCommand(options: {
   runId?: string;
+  runIds?: string[];
   actor?: string;
   action?: string;
   dataDir?: string;
 }): number {
   const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+  const runIds = [
+    ...(options.runId ? [options.runId] : []),
+    ...(options.runIds ?? [])
+  ];
   const trail = kernel.getAuditTrail({
-    runId: options.runId,
+    runIds: runIds.length > 0 ? runIds : undefined,
     actor: options.actor,
     action: options.action
   });
   if (trail.records.length === 0) {
     console.log('No audit records match the filter.');
     return 0;
+  }
+  if (runIds.length === 2) {
+    const printRun = (runId: string) => {
+      console.log(`Run ${runId}:`);
+      const records = trail.records.filter(
+        (record) => record.workflowRunId === runId && record.action === 'agent.step'
+      );
+      if (records.length === 0) {
+        console.log('  (no agent steps)');
+        return;
+      }
+      for (const record of records) {
+        console.log(
+          `  ${record.nodeId ?? '-'}  agent=${record.actor.id}  persona=${record.actor.persona ?? '—'}  score=${record.score ?? '—'}`
+        );
+      }
+    };
+
+    const [runA, runB] = runIds;
+    printRun(runA!);
+    console.log('');
+    printRun(runB!);
+    console.log('\nSummary:');
+
+    const recordsByRun = new Map(
+      runIds.map((runId) => [
+        runId,
+        new Map(
+          trail.records
+            .filter((record) => record.workflowRunId === runId && record.action === 'agent.step')
+            .map((record) => [record.nodeId ?? record.id, record] as const)
+        )
+      ] as const)
+    );
+    const nodeIds = new Set([
+      ...recordsByRun.get(runA!)!.keys(),
+      ...recordsByRun.get(runB!)!.keys()
+    ]);
+    for (const nodeId of nodeIds) {
+      const left = recordsByRun.get(runA!)!.get(nodeId);
+      const right = recordsByRun.get(runB!)!.get(nodeId);
+      const scoreDiff =
+        typeof left?.score === 'number' && typeof right?.score === 'number'
+          ? right.score - left.score
+          : undefined;
+      console.log(
+        `  ${nodeId}  personas=${left?.actor.persona ?? '—'} vs ${right?.actor.persona ?? '—'}  scores=${left?.score ?? '—'} vs ${right?.score ?? '—'}${scoreDiff !== undefined ? `  Δ=${scoreDiff}` : ''}`
+      );
+    }
+    console.log(`\nchain: ${trail.chainIntact ? 'intact ✔' : 'BROKEN ✘'} (${trail.records.length} records)`);
+    return trail.chainIntact ? 0 : 1;
   }
   for (const record of trail.records) {
     const parts = [
@@ -409,6 +500,7 @@ function usage(): void {
 Usage:
   flowforge validate <package-dir>
       Validate a .workforce package.
+      --graph                  Also validate workflow graph reachability.
 
   flowforge inspect <package-dir>
       Show agents, skills, personas and workflows in a package.
@@ -420,6 +512,7 @@ Usage:
                                array (each element answers the next human step).
       --watch                  Print progress as the run advances.
       --identity <config.json> Sign users in via OIDC device flow.
+      --persona <id>           Override the run persona for agent steps.
       --data-dir <dir>         Persist run state (default: ~/.flowforge).
 
   flowforge runs list [--package <id>] [--data-dir <dir>]
@@ -464,6 +557,18 @@ function flag(args: string[], ...names: string[]): string | undefined {
   return undefined;
 }
 
+function flags(args: string[], ...names: string[]): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    for (const name of names) {
+      if (arg === name && i + 1 < args.length) values.push(args[i + 1]!);
+      else if (arg.startsWith(`${name}=`)) values.push(arg.slice(name.length + 1));
+    }
+  }
+  return values;
+}
+
 function hasFlag(args: string[], ...names: string[]): boolean {
   return names.some((name) => args.includes(name));
 }
@@ -487,6 +592,9 @@ function positionals(args: string[], ...flagNames: string[]): string[] {
   return result;
 }
 
+const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona'];
+const ALL_FLAGS = ['--mock', '--watch', '--graph', ...VALUE_FLAGS];
+
 const [, , command, subOrArg, ...rest] = process.argv;
 const allArgs = subOrArg !== undefined ? [subOrArg, ...rest] : [];
 
@@ -500,29 +608,27 @@ const isDirectRun = (() => {
 })();
 
 if (isDirectRun) {
-  const ALL_FLAGS = [
-    '--mock', '--answers', '--identity', '--data-dir', '--watch',
-    '--package', '--run', '--actor', '--action', '--output'
-  ];
-
   switch (command) {
-    case 'validate':
-      process.exit(subOrArg ? validateCommand(subOrArg) : (usage(), 1));
+    case 'validate': {
+      const pos = positionals(allArgs, ...VALUE_FLAGS);
+      process.exit(pos[0] ? validateCommandWithOptions(pos[0], { graph: hasFlag(allArgs, '--graph') }) : (usage(), 1));
       break;
+    }
 
     case 'inspect':
       process.exit(subOrArg ? inspectCommand(subOrArg) : (usage(), 1));
       break;
 
     case 'run': {
-      const pos = positionals(allArgs, ...ALL_FLAGS);
+      const pos = positionals(allArgs, ...VALUE_FLAGS);
       if (pos.length < 2) { usage(); process.exit(1); }
       runCommand(pos[0]!, pos[1]!, {
         mock: hasFlag(allArgs, '--mock'),
         identityConfigPath: flag(allArgs, '--identity'),
         answersPath: flag(allArgs, '--answers'),
         dataDir: flag(allArgs, '--data-dir'),
-        watch: hasFlag(allArgs, '--watch')
+        watch: hasFlag(allArgs, '--watch'),
+        persona: flag(allArgs, '--persona')
       }).then((code) => process.exit(code));
       break;
     }
@@ -549,7 +655,7 @@ if (isDirectRun) {
       if (sub === 'show') {
         process.exit(
           auditShowCommand({
-            runId: flag(rest, '--run'),
+            runIds: flags(rest, '--run'),
             actor: flag(rest, '--actor'),
             action: flag(rest, '--action'),
             dataDir: flag(rest, '--data-dir')
@@ -574,7 +680,7 @@ if (isDirectRun) {
 
     case 'memory': {
       const sub = subOrArg;
-      const pos = positionals(rest, ...ALL_FLAGS);
+      const pos = positionals(rest, ...VALUE_FLAGS);
       if (sub === 'list') {
         if (!pos[0]) { usage(); process.exit(1); }
         memoryListCommand(pos[0], { dataDir: flag(rest, '--data-dir') }).then((code) =>

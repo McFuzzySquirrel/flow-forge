@@ -34,6 +34,7 @@ import {
   FileStateStore,
   InMemoryStateStore,
   WorkflowEngine,
+  validateGraph,
   type StateStore,
   type WorkflowRun
 } from '@flowforge/workflow';
@@ -105,6 +106,7 @@ function toRunSnapshot(run: WorkflowRun, packageId: string): RunSnapshot {
     currentNodeId: run.currentNodeId,
     pending: run.pending,
     participants: run.participants,
+    ...(run.runPersonaId ? { runPersonaId: run.runPersonaId } : {}),
     error: run.error
   };
 }
@@ -174,11 +176,20 @@ export class FlowForgeKernel implements KernelApi {
 
   validatePackage(packageDir: string): PackageValidationResult {
     try {
-      loadWorkforcePackage(packageDir);
-      return { valid: true, errors: [] };
+      const pkg = loadWorkforcePackage(packageDir);
+      const graphErrors = [...pkg.workflows.values()].flatMap((workflow) =>
+        validateGraph(workflow).map((error) => `${workflow.id}: ${error}`)
+      );
+      return { valid: graphErrors.length === 0, errors: [], graphErrors };
     } catch (error) {
-      if (error instanceof PackageValidationError) return { valid: false, errors: error.errors };
-      return { valid: false, errors: [error instanceof Error ? error.message : String(error)] };
+      if (error instanceof PackageValidationError) {
+        return { valid: false, errors: error.errors, graphErrors: [] };
+      }
+      return {
+        valid: false,
+        errors: [error instanceof Error ? error.message : String(error)],
+        graphErrors: []
+      };
     }
   }
 
@@ -200,11 +211,27 @@ export class FlowForgeKernel implements KernelApi {
 
   // ---- Runs ---------------------------------------------------------------
 
-  async startRun(packageId: string, workflowId: string): Promise<RunSnapshot> {
+  async startRun(
+    packageId: string,
+    workflowId: string,
+    options: { personaId?: string } = {}
+  ): Promise<RunSnapshot> {
     const { pkg, engine } = this.entry(packageId);
     const workflow = pkg.workflows.get(workflowId);
     if (!workflow) throw new Error(`Unknown workflow '${workflowId}' in package '${packageId}'`);
-    const run = await engine.start(workflow);
+    const persona = options.personaId ? pkg.personas.get(options.personaId) : undefined;
+    if (options.personaId && !persona) throw new Error(`Unknown persona '${options.personaId}'`);
+    const run = await engine.start(
+      workflow,
+      options.personaId
+        ? {
+            personaId: options.personaId,
+            personaPolicy: persona?.decisionPolicy
+              ? ({ ...persona.decisionPolicy } as Record<string, unknown>)
+              : undefined
+          }
+        : undefined
+    );
     this.runIndex.set(run.id, { packageId, workflowId });
     if (this.dataDir) this.saveRunIndex();
     return toRunSnapshot(run, packageId);
@@ -243,7 +270,10 @@ export class FlowForgeKernel implements KernelApi {
 
   getAuditTrail(filter?: AuditFilter): AuditTrailSnapshot {
     let records = this.audit.all();
-    if (filter?.runId) records = records.filter((r) => r.workflowRunId === filter.runId);
+    const runIds = new Set([filter?.runId, ...(filter?.runIds ?? [])].filter((value): value is string => Boolean(value)));
+    if (runIds.size > 0) {
+      records = records.filter((r) => Boolean(r.workflowRunId && runIds.has(r.workflowRunId)));
+    }
     if (filter?.actor) records = records.filter((r) => r.actor.id === filter.actor);
     if (filter?.action) records = records.filter((r) => r.action === filter.action);
     return { records, chainIntact: this.audit.verify() === -1 };
@@ -278,8 +308,9 @@ export class FlowForgeKernel implements KernelApi {
       .set('small', this.modelProvider)
       .set('medium', this.modelProvider)
       .set('large', this.modelProvider);
+    const memory = new MemoryService();
     const engine = new WorkflowEngine(
-      new AgentRuntime(pkg, models, new MemoryService(), this.audit),
+      new AgentRuntime(pkg, models, memory, this.audit),
       this.audit,
       this.stateStore
     );

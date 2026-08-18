@@ -41,6 +41,8 @@ export interface WorkflowRun {
   pending?: PendingHumanTask;
   /** Per-run participant bindings: role → principal id of whoever first acted in that role. */
   participants?: Record<string, string>;
+  runPersonaId?: string;
+  runPersonaPolicy?: Record<string, unknown>;
   error?: string;
 }
 
@@ -81,7 +83,11 @@ export class FileStateStore implements StateStore {
 /** Evaluates simple branch conditions like "score >= 50" or "default" over state. */
 const OPERATORS = ['>=', '<=', '==', '!=', '>', '<'] as const;
 
-export function evaluateCondition(expression: string, state: Record<string, unknown>): boolean {
+export function evaluateCondition(
+  expression: string,
+  state: Record<string, unknown>,
+  personaPolicy?: Record<string, unknown>
+): boolean {
   if (expression === 'default') return true;
   const trimmed = expression.trim();
   const operator = OPERATORS.find((op) => trimmed.includes(op));
@@ -89,12 +95,14 @@ export function evaluateCondition(expression: string, state: Record<string, unkn
   const index = trimmed.indexOf(operator);
   const path = trimmed.slice(0, index).trim();
   const rawValue = trimmed.slice(index + operator.length).trim();
-  if (!/^[a-zA-Z_][\w.]*$/.test(path) || rawValue.length === 0) {
-    throw new Error(`Unsupported condition expression: '${expression}'`);
+  if (!/^[$a-zA-Z_][\w.]*$/.test(path) || rawValue.length === 0) {
+   throw new Error(`Unsupported condition expression: '${expression}'`);
   }
-  let left: unknown = state;
+  const personaRoot = personaPolicy ?? ((state['$persona'] ?? {}) as Record<string, unknown>);
+  let left: unknown = path === '$persona' || path.startsWith('$persona.') ? personaRoot : state;
   for (const key of path.split('.')) {
-    left = (left as Record<string, unknown> | undefined)?.[key];
+   if (key === '$persona') continue;
+   left = (left as Record<string, unknown> | undefined)?.[key];
   }
   let right: unknown;
   if (rawValue === 'true') right = true;
@@ -120,6 +128,63 @@ export function evaluateCondition(expression: string, state: Record<string, unkn
   }
 }
 
+export function validateGraph(workflow: WorkflowDefinition): string[] {
+  const errors: string[] = [];
+  const nodesById = new Map(workflow.nodes.map((node) => [node.id, node] as const));
+  if (!nodesById.has(workflow.start)) {
+    errors.push(`Start node '${workflow.start}' not found`);
+  }
+
+  const targetsFor = (node: WorkflowNode): string[] => {
+    const targets: string[] = [];
+    if (node.next) targets.push(node.next);
+    if (node.type === 'humanApproval') {
+      if (node.onApprove) targets.push(node.onApprove);
+      if (node.onReject) targets.push(node.onReject);
+    }
+    if (node.type === 'branch') targets.push(...node.conditions.map((condition) => condition.next));
+    if (node.type === 'parallel') targets.push(...node.branches);
+    return targets;
+  };
+
+  for (const node of workflow.nodes) {
+    for (const target of targetsFor(node)) {
+      if (!nodesById.has(target)) {
+        errors.push(`Node '${node.id}' points to missing node '${target}'`);
+      }
+    }
+    if (node.type === 'branch' && !node.conditions.some((condition) => condition.when === 'default')) {
+      errors.push(`Branch node '${node.id}' is missing a default condition`);
+    }
+  }
+
+  if (!nodesById.has(workflow.start)) return errors;
+
+  const visited = new Set<string>();
+  const queue = [workflow.start];
+  while (queue.length > 0) {
+    const nodeId = queue.shift()!;
+    if (visited.has(nodeId)) continue;
+    visited.add(nodeId);
+    const node = nodesById.get(nodeId);
+    if (!node) continue;
+    for (const target of targetsFor(node)) {
+      if (!visited.has(target)) queue.push(target);
+    }
+  }
+
+  for (const node of workflow.nodes) {
+    if (!visited.has(node.id)) errors.push(`Node '${node.id}' not reachable from start`);
+  }
+  return errors;
+}
+
+export interface WorkflowStartOptions {
+  personaId?: string;
+  personaPolicy?: Record<string, unknown>;
+  initialState?: Record<string, unknown>;
+}
+
 /**
  * Embedded in-process workflow runner. Interprets the declarative workflow
  * spec: agent steps (with retries), human-input and human-approval steps
@@ -134,13 +199,18 @@ export class WorkflowEngine {
     private readonly store: StateStore = new InMemoryStateStore()
   ) {}
 
-  start(workflow: WorkflowDefinition, initialState: Record<string, unknown> = {}): Promise<WorkflowRun> {
+  start(
+    workflow: WorkflowDefinition,
+    options: WorkflowStartOptions = {}
+  ): Promise<WorkflowRun> {
     const run: WorkflowRun = {
       id: randomUUID(),
       workflowId: workflow.id,
       status: 'running',
       currentNodeId: workflow.start,
-      state: { ...(workflow.state ?? {}), ...initialState }
+      state: { ...(workflow.state ?? {}), ...(options.initialState ?? {}) },
+      runPersonaId: options.personaId,
+      runPersonaPolicy: options.personaPolicy ? structuredClone(options.personaPolicy) : undefined
     };
     this.audit.record({
       actor: { type: 'system', id: 'workflow-engine' },
@@ -274,7 +344,9 @@ export class WorkflowEngine {
           }
           case 'branch': {
             const branch = node as BranchNode;
-            const matched = branch.conditions.find((c) => evaluateCondition(c.when, run.state));
+            const matched = branch.conditions.find((c) =>
+              evaluateCondition(c.when, run.state, run.runPersonaPolicy)
+            );
             if (!matched) throw new Error(`No branch condition matched at node '${node.id}'`);
             run.currentNodeId = matched.next;
             break;
@@ -319,11 +391,18 @@ export class WorkflowEngine {
           agentId: node.agent,
           action: node.action,
           inputs,
-          personaId: node.persona,
+          personaId: node.persona ?? run.runPersonaId,
           workflowRunId: run.id,
           nodeId: node.id
         });
         if (node.output) run.state[node.output] = result.output;
+        for (const entry of node.memoryWrite ?? []) {
+          const text = entry.text.replace(
+            /\{\{(\w+)\}\}/g,
+            (_, key: string) => String(run.state[key] ?? '')
+          );
+          await this.agents.writeMemory(node.agent, text, entry.namespace);
+        }
         return;
       } catch (error) {
         lastError = error;

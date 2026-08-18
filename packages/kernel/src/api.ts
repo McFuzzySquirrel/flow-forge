@@ -20,6 +20,7 @@ import type { AuditRecord } from '@flowforge/core';
 export interface PackageValidationResult {
   valid: boolean;
   errors: string[];
+  graphErrors: string[];
 }
 
 export interface AgentSummary {
@@ -67,6 +68,7 @@ export interface RunSnapshot {
   pending?: PendingTaskSnapshot;
   /** Per-run participant bindings: role → principal id (ADR-0010). */
   participants?: Record<string, string>;
+  runPersonaId?: string;
   error?: string;
 }
 
@@ -94,6 +96,8 @@ export interface AuditTrailSnapshot {
 export interface AuditFilter {
   /** Only records for this run. */
   runId?: string;
+  /** Only records for any of these runs. */
+  runIds?: string[];
   /** Only records whose actor.id matches. */
   actor?: string;
   /** Only records whose action string matches (exact). */
@@ -132,7 +136,7 @@ export interface KernelApi {
 
   /** Start a new workflow run.  Returns the run immediately; it may already
    *  be waitingForHuman if the first node is a human step. */
-  startRun(packageId: string, workflowId: string): Promise<RunSnapshot>;
+  startRun(packageId: string, workflowId: string, options?: { personaId?: string }): Promise<RunSnapshot>;
 
   /**
    * Resume a paused run with a human response.  The caller must be signed in
