@@ -74,6 +74,9 @@ pnpm --filter @flowforge/desktop dev
 The reasoning behind these and other foundational decisions is captured as Architecture Decision
 Records in [docs/adr/](docs/adr/README.md).
 
+A comprehensive guide to running tests and wiring up real LLM providers (Ollama, OpenAI-compatible,
+or custom) lives in [docs/testing.md](docs/testing.md).
+
 A history of all notable changes lives in [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
