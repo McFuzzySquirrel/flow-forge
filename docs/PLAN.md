@@ -34,6 +34,8 @@ EmbeddingProvider abstraction, namespace isolation, retention/decay).
 - `flowforge runs list` — list persisted runs (from `~/.flowforge`)
 - `flowforge audit show` — view audit records; `audit verify` checks chain integrity
 - `flowforge audit show --run <a> --run <b>` — A/B compare personas and scores across two runs
+- `flowforge memory list <packageId>/<agentId> --data-dir ~/.flowforge` — browse an agent's memory items
+- `flowforge memory delete <packageId>/<agentId> <item-id> --data-dir ~/.flowforge` — delete an item ("right to forget")
 
 **Design rules that govern everything below** (see README):
 

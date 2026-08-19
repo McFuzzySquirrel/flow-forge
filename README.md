@@ -59,6 +59,10 @@ node packages/cli/dist/index.js runs list
 node packages/cli/dist/index.js audit show
 node packages/cli/dist/index.js audit verify
 
+# browse and manage agent memory (file-backed, persisted in --data-dir)
+node packages/cli/dist/index.js memory list dev.flowforge.grade7-maths/coach --data-dir ~/.flowforge
+node packages/cli/dist/index.js memory delete dev.flowforge.grade7-maths/coach <item-id> --data-dir ~/.flowforge
+
 # try the desktop shell (Electron + React, dev-identity sign-in, parked Phase 2.1 shell)
 pnpm --filter @flowforge/desktop dev
 ```
@@ -98,6 +102,6 @@ of how LLMs are integrated — see [docs/pages-architecture.md](docs/pages-archi
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
 - **Phase 2 — Headless completeness & kernel API hardening** ✅ `KernelApi`, file-backed persistence, full CLI (`runs`, `audit`, `memory`), second consumer proof *(revised per ADR-0011)*
-- **Phase 3 — Differentiators** 🚧 in progress — persona enforcement ✅, Coach & Reflection agents ✅, memory write policy ✅, graph validation ✅; remaining: Chroma VectorStore adapter & memory hardening (3.3)
+- **Phase 3 — Differentiators** ✅ persona enforcement, Coach & Reflection agents, memory write policy, graph validation, `EmbeddingProvider` abstraction, `ChromaVectorStore`, `FileVectorStore`, namespace isolation, retention/decay knobs
 - **Phase 4 — Ecosystem** — package export/signing, second domain package, Dapr Workflows runner
 - **Phase 5 — UI layer(s)** — Electron shell (completing original Phase 2 screens), visual workflow editor, optional mobile
