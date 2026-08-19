@@ -264,18 +264,16 @@ export class ChromaVectorStore implements VectorStore {
     const cached = this.collectionIds.get(name);
     if (cached) return cached;
 
-    // Try to get the collection first; create it if it doesn't exist.
-    const getRes = await fetch(`${this.baseUrl}/api/v1/collections/${encodeURIComponent(name)}`);
-    if (getRes.ok) {
-      const col = (await getRes.json()) as ChromaCollection;
-      this.collectionIds.set(name, col.id);
-      return col.id;
-    }
-
+    // get_or_create: true makes this idempotent for concurrent callers.
+    // cosine distance is configured so returned distances are in [0, 2].
     const createRes = await fetch(`${this.baseUrl}/api/v1/collections`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name, get_or_create: true }),
+      body: JSON.stringify({
+        name,
+        get_or_create: true,
+        metadata: { 'hnsw:space': 'cosine' },
+      }),
     });
     if (!createRes.ok) {
       throw new Error(`Chroma create collection error ${createRes.status}: ${await createRes.text()}`);
@@ -334,7 +332,7 @@ export class ChromaVectorStore implements VectorStore {
         text: docs[i] ?? '',
         metadata: Object.keys(meta).length > 0 ? meta : undefined,
         createdAt,
-        relevance: 1 - (dists[i] ?? 1),
+        relevance: 1 - (dists[i] ?? 2) / 2,
       };
     });
   }
