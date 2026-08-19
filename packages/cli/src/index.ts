@@ -593,7 +593,6 @@ function positionals(args: string[], ...flagNames: string[]): string[] {
 }
 
 const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona'];
-const ALL_FLAGS = ['--mock', '--watch', '--graph', ...VALUE_FLAGS];
 
 const [, , command, subOrArg, ...rest] = process.argv;
 const allArgs = subOrArg !== undefined ? [subOrArg, ...rest] : [];
