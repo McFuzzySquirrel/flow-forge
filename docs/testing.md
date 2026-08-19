@@ -75,7 +75,7 @@ function makeRuntime(responder: (systemPrompt: string) => string) {
     .set('small', provider)
     .set('medium', provider)
     .set('large', provider);
-  return new AgentRuntime(pkg, loadWorkforcePackage, models, new MemoryService(), new AuditLog());
+  return new AgentRuntime(pkg, models, new MemoryService(), new AuditLog());
 }
 ```
 
