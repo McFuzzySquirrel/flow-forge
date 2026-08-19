@@ -28,7 +28,7 @@ packages/
   workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching)
   identity/            @flowforge/identity  — OIDC identity, claim-to-role mapping, sessions (ADR-0010)
   cli/                 @flowforge/cli       — flowforge validate | inspect | run
-  desktop/             @flowforge/desktop   — Electron + React desktop shell (Phase 2 vertical slice)
+  desktop/             @flowforge/desktop   — Electron + React desktop shell (parked after Phase 2.1; richer UI resumes in Phase 5)
 fixtures/
   Grade7-Maths.workforce/                   — reference workforce package
 ```
@@ -59,7 +59,7 @@ node packages/cli/dist/index.js runs list
 node packages/cli/dist/index.js audit show
 node packages/cli/dist/index.js audit verify
 
-# try the desktop shell (Electron + React, dev-identity sign-in, Phase 2 Milestone 2.1)
+# try the desktop shell (Electron + React, dev-identity sign-in, parked Phase 2.1 shell)
 pnpm --filter @flowforge/desktop dev
 ```
 
@@ -81,11 +81,16 @@ A history of all notable changes lives in [CHANGELOG.md](CHANGELOG.md).
 The detailed, task-level plan for the next phases — including "learn while you build" notes on the
 concepts behind each milestone — lives in [docs/PLAN.md](docs/PLAN.md).
 
-For a detailed view of the current Phase 1/kernel branch — including what you can run today and what
-it proves before the UI phase — see [docs/phase-1-kernel-architecture.md](docs/phase-1-kernel-architecture.md).
+Per-phase architecture docs:
 
-For the desktop shell pages architecture, planned Phase 5 screens, and a full explanation of how
-LLMs are integrated — see [docs/pages-architecture.md](docs/pages-architecture.md).
+- [Phase 1 kernel architecture](docs/phase-1-kernel-architecture.md)
+- [Phase 2 headless kernel API architecture](docs/phase-2-headless-kernel-api-architecture.md)
+- [Phase 3 differentiators architecture](docs/phase-3-differentiators-architecture.md)
+- [Phase 4 ecosystem architecture](docs/phase-4-ecosystem-architecture.md)
+- [Phase 5 UI architecture](docs/phase-5-ui-architecture.md)
+
+For the desktop shell page breakdown, IPC layering, planned Phase 5 screens, and a full explanation
+of how LLMs are integrated — see [docs/pages-architecture.md](docs/pages-architecture.md).
 
 - **Phase 0 — Foundations** ✅ monorepo, six core schemas, CLI validator, reference package
 - **Phase 1 — Kernel** ✅ package loader, agent runtime, memory service, workflow engine, audit log, end-to-end headless test
