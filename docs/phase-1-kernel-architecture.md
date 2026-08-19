@@ -1,8 +1,8 @@
 # Phase 1 Kernel Architecture
 
 This branch is the **Phase 1 / Kernel** cut of FlowForge: the headless platform is in place, the
-reference workforce package runs end-to-end, and the next phase is to put a UI shell around the
-kernel without changing the core rules that already work.
+reference workforce package runs end-to-end, and the next architectural step is to harden the
+kernel's headless contract before richer UI work resumes in Phase 5 (ADR-0011).
 
 ## What running this branch looks like
 
@@ -37,9 +37,9 @@ claims:
    human input or approval and then resume from persisted run state.
 4. **Agent execution is auditable by construction.** Each agent step emits an audit record with the
    actor, action, prompt version, evidence, score/confidence where available, and hash-chain linkage.
-5. **The kernel is modular enough to survive a UI phase.** Model providers, memory, workflow state
-   and audit sinks are already behind interfaces, so Phase 2 can add a desktop shell without
-   rewriting the core.
+5. **The kernel is modular enough to survive later adapters.** Model providers, memory, workflow
+   state and audit sinks are already behind interfaces, so Phase 2 can harden the headless contract
+   and Phase 5 can add richer UI surfaces without rewriting the core.
 6. **Human actions are authenticated and role-checked (ADR-0010).** Identity is OIDC-only via
    `packages/identity`; `WorkflowEngine.resume` requires a `Principal`, verifies the pending node's
    role, binds roles to participants per run, and emits an audited
@@ -72,7 +72,7 @@ that has not passed this layer.
   `IdentityRegistry`, `RoleMapper`, `PermissionPolicy`, `SessionStore`, and an `IdentityService`
   that audits every login, refresh and denial.
 
-These packages form the kernel that Phase 2 should wrap rather than replace.
+These packages form the kernel that Phase 2 should harden rather than replace.
 
 ### Delivery layer
 
@@ -80,8 +80,8 @@ These packages form the kernel that Phase 2 should wrap rather than replace.
 - The CLI is intentionally thin: it loads a package, wires together the runtime, and exposes
   `validate`, `inspect`, and `run`.
 
-This means the CLI is already acting like the first adapter around the kernel. The future desktop app
-should be the next adapter, not a second implementation of the runtime.
+This means the CLI is already acting like the first adapter around the kernel. Later UI surfaces
+should remain adapters, not second implementations of the runtime.
 
 ## Current execution path
 
@@ -124,9 +124,10 @@ Phase 2 should preserve these properties:
 - the UI renders package data rather than introducing hardcoded domain behaviour
 - the workflow engine remains the single authority for run state and pause/resume behaviour
 - audit generation stays runtime-enforced
+- the CLI and `KernelApi` become the reference proof surfaces for later adapters
 - the renderer/UI is an adapter over typed interfaces, not a place where kernel logic leaks
 - every human step passes through an authenticated `Principal`; the UI never bypasses the engine's
   authorization checks, and tokens/sessions stay in the trusted (main) process
 
-If those constraints hold, Phase 2 can add user experience without weakening the architectural proof
-this branch already establishes.
+If those constraints hold, later phases can add persistence, differentiators, ecosystem features and
+eventual UI surfaces without weakening the architectural proof this branch already establishes.
