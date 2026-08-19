@@ -25,7 +25,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import type { IdentityConfig } from '@flowforge/core';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
 import { AuditLog } from '@flowforge/audit';
-import { MemoryService } from '@flowforge/memory';
+import { FileVectorStore, MemoryService } from '@flowforge/memory';
 import { AgentRuntime, MockModelProvider, ModelRegistry, OllamaProvider } from '@flowforge/agents';
 import { IdentityService, MockIdentityProvider } from '@flowforge/identity';
 import { WorkflowEngine } from '@flowforge/workflow';
@@ -461,19 +461,18 @@ export function auditExportCommand(options: {
 
 export async function memoryListCommand(
   namespace: string,
-  // dataDir is accepted for API consistency; memory persistence requires the Chroma
-  // VectorStore adapter (Phase 3, Milestone 3.3 — ADR-0011). Until then this command
-  // operates on an in-memory store within the current process.
-  _options: { dataDir?: string }
+  options: { dataDir?: string }
 ): Promise<number> {
-  const memory = new MemoryService();
+  const store = options.dataDir ? new FileVectorStore(options.dataDir) : undefined;
+  const memory = new MemoryService(store);
   const items = await memory.list(namespace);
   if (items.length === 0) {
     console.log(`No memory items in namespace '${namespace}'.`);
     return 0;
   }
   for (const item of items) {
-    console.log(`${item.id}  ${item.createdAt}  ${item.text.slice(0, 80)}${item.text.length > 80 ? '…' : ''}`);
+    const meta = item.metadata ? `  ${JSON.stringify(item.metadata)}` : '';
+    console.log(`${item.id}  ${item.createdAt}  ${item.text.slice(0, 80)}${item.text.length > 80 ? '…' : ''}${meta}`);
   }
   return 0;
 }
@@ -481,10 +480,10 @@ export async function memoryListCommand(
 export async function memoryDeleteCommand(
   namespace: string,
   itemId: string,
-  // dataDir is accepted for API consistency; see memoryListCommand note above.
-  _options: { dataDir?: string }
+  options: { dataDir?: string }
 ): Promise<number> {
-  const memory = new MemoryService();
+  const store = options.dataDir ? new FileVectorStore(options.dataDir) : undefined;
+  const memory = new MemoryService(store);
   await memory.forget(namespace, itemId);
   console.log(`✔ Deleted item '${itemId}' from namespace '${namespace}'.`);
   return 0;

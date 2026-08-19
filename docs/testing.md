@@ -23,7 +23,7 @@ All tests use [Vitest](https://vitest.dev/) and run in a Node.js environment.  T
 | `@flowforge/core` | `src/validate.test.ts` | All seven JSON schemas — valid and invalid manifests, agent defs, skill frontmatter, workflow node discriminators, identity config |
 | `@flowforge/workforce-packages` | `src/index.test.ts` | Loading and cross-reference validation of the `Grade7-Maths.workforce` fixture; `parseSkillFile` happy path and error cases |
 | `@flowforge/agents` | `src/runtime.test.ts` | `AgentRuntime.step` — structured output parsing, persona overlay injection, skill instruction inclusion, memory recall as audit evidence, unknown-agent rejection, `writeMemory` |
-| `@flowforge/memory` | `src/index.test.ts` | Namespace scoping, semantic recall, `forget`, `list` |
+| `@flowforge/memory` | `src/index.test.ts` | `VectorStore` interface contract suite (run against both `InMemoryVectorStore` and `FileVectorStore`); namespace isolation; `MemoryService` recall/forget/list; retention/decay (`maxItems`, `maxAgeMs`); `MockEmbeddingProvider` vector quality |
 | `@flowforge/audit` | `src/index.test.ts` | Hash-chain construction and verification, tamper detection, schema-valid records |
 | `@flowforge/workflow` | `src/index.test.ts` | Full end-to-end assignment lifecycle (5 agent steps + 3 human pauses); rejection/resubmit loop; role enforcement; participant binding; retry/fail; persona override; `evaluateCondition`; `validateGraph` |
 | `@flowforge/identity` | `src/index.test.ts` | `RoleMapper`, `PermissionPolicy`, `IdentityRegistry`, `IdentityService` login/refresh/logout/audit, `InMemorySessionStore` TTL |
@@ -299,6 +299,114 @@ flowforge run fixtures/Grade7-Maths.workforce assignment
 
 ---
 
+## Testing the memory subsystem
+
+### VectorStore implementations
+
+`@flowforge/memory` ships three `VectorStore` implementations, all tested against the same shared contract suite in `packages/memory/src/index.test.ts`:
+
+| Store | When to use |
+|---|---|
+| `InMemoryVectorStore` | Unit tests and in-process workflows; no persistence |
+| `FileVectorStore` | CLI (`--data-dir`) and single-machine deployments; persists collections as JSON files |
+| `ChromaVectorStore` | Production / multi-agent deployments; requires a running Chroma server |
+
+The shared contract verifies: `add`/`list` isolation between collections, `query` relevance and limit, `remove` deletes from both `list` and `query`, empty collections return `[]`.
+
+### EmbeddingProvider
+
+Embedding is behind an interface so the same `ChromaVectorStore` works in tests (with `MockEmbeddingProvider`) and in production (with `OllamaEmbeddingProvider` or a custom provider):
+
+```ts
+import { MockEmbeddingProvider, OllamaEmbeddingProvider, ChromaVectorStore } from '@flowforge/memory';
+
+// Tests / offline — deterministic sparse binary vectors
+const store = new ChromaVectorStore(new MockEmbeddingProvider());
+
+// Production — real dense vectors via Ollama
+const store = new ChromaVectorStore(
+  new OllamaEmbeddingProvider('http://localhost:11434', 'nomic-embed-text')
+);
+```
+
+**Using `OllamaEmbeddingProvider` locally:**
+
+```bash
+ollama pull nomic-embed-text   # ~274 MB
+ollama serve
+```
+
+Then point `OllamaEmbeddingProvider` at `http://localhost:11434`.
+
+### Running against a live Chroma server
+
+```bash
+# Start Chroma with Docker
+docker run -p 8000:8000 chromadb/chroma
+
+# Point the store at it in your integration test or CLI run
+```
+
+Use `describe.skipIf(!process.env.CHROMA_URL)` to guard Chroma integration tests so they are skipped when no server is available:
+
+```ts
+describe.skipIf(!process.env.CHROMA_URL)('ChromaVectorStore — integration', () => {
+  it('adds and recalls items', async () => {
+    const store = new ChromaVectorStore(
+      new MockEmbeddingProvider(),
+      process.env.CHROMA_URL
+    );
+    await store.add('test/ns', { id: '1', text: 'fractions lesson', createdAt: new Date().toISOString() });
+    const results = await store.query('test/ns', 'fractions', 5);
+    expect(results.length).toBeGreaterThan(0);
+  });
+});
+```
+
+### Namespace isolation
+
+`MemoryService` enforces strict namespace isolation: each agent's memory lives in `<packageId>/<agentId>`. The isolation tests in `index.test.ts` verify:
+
+- Items added to `pkg/agent-a` never appear in `pkg/agent-b` recall or list.
+- Clearing (forgetting all items from) one agent's namespace does not affect any other namespace.
+
+### Retention and decay
+
+`MemoryService.setPolicy(namespace, policy)` accepts a `NamespacePolicy`:
+
+```ts
+interface NamespacePolicy {
+  maxItems?: number;   // prune oldest items when this count is exceeded
+  maxAgeMs?: number;   // exclude items older than this many milliseconds
+}
+```
+
+Example — keep at most 50 items per agent, discard anything older than 30 days:
+
+```ts
+const memory = new MemoryService(new FileVectorStore(dataDir));
+memory.setPolicy(MemoryService.namespace('pkg', 'coach'), {
+  maxItems: 50,
+  maxAgeMs: 30 * 24 * 60 * 60 * 1000,
+});
+```
+
+Both limits can be combined. `maxItems` is enforced immediately after each `remember` call; `maxAgeMs` is applied at query/list time without removing records from disk (useful for soft-expiry without irreversible deletes).
+
+### Memory CLI commands
+
+```bash
+# List all items in a namespace (reads from file-backed store)
+flowforge memory list dev.flowforge.grade7-maths/coach --data-dir ~/.flowforge
+
+# Delete a specific item (right to forget)
+flowforge memory delete dev.flowforge.grade7-maths/coach <item-id> --data-dir ~/.flowforge
+```
+
+Without `--data-dir` the commands operate on a transient in-memory store (useful for smoke-testing the command routing).
+
+---
+
 ## Environment variables reference
 
 | Variable | Used by | Default | Purpose |
@@ -307,6 +415,7 @@ flowforge run fixtures/Grade7-Maths.workforce assignment
 | `OPENAI_API_KEY` | integration tests | — | OpenAI API key |
 | `AZURE_OPENAI_API_KEY` | integration tests | — | Azure OpenAI API key |
 | `GROQ_API_KEY` | integration tests | — | Groq API key |
+| `CHROMA_URL` | integration tests | — | Chroma server URL; skips Chroma integration tests when unset |
 
 ---
 

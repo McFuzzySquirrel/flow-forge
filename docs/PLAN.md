@@ -12,16 +12,16 @@ companion.
 sessions, and `WorkflowEngine.resume` now requires an authenticated `Principal` with role checks
 and per-run participant binding (tasks I.1–I.5 below). Phase 3 milestones 3.1 (persona
 enforcement), 3.2 (Coach & Reflection agents), 3.3.2 (memory write policy) and 3.4 (graph
-validation) are shipped; the remaining Phase 3 item is Milestone 3.3 (Chroma VectorStore adapter
-and supporting memory features).
+validation) are shipped; **Milestone 3.3 is now complete**: Chroma VectorStore adapter with
+`EmbeddingProvider` abstraction, `FileVectorStore` for file-backed persistence, namespace isolation
+tests, and retention/decay knobs (`maxItems`, `maxAgeMs`) are all landed.
 
 **Phase 2 is complete (see ADR-0011).** The original "Vertical Slice UI" phase was replaced by
-**Headless completeness & kernel API hardening** — all milestones landed. Phase 3 differentiator
-features have now shipped — persona enforcement, Coach/Reflection agents in the Grade7-Maths
-fixture, declarative memory write policy, and `flowforge validate --graph` for reachability
-checks. The Electron shell stays buildable but receives no new screens until Phase 5.
-**Next up is completing Milestone 3.3** (Chroma/real-embeddings VectorStore adapter, namespace
-isolation tests, and retention/decay knobs), then Phase 4.
+**Headless completeness & kernel API hardening** — all milestones landed. **Phase 3 is now
+complete** — persona enforcement, Coach/Reflection agents, declarative memory write policy,
+`flowforge validate --graph`, and the full long-term memory stack (ChromaVectorStore, FileVectorStore,
+EmbeddingProvider abstraction, namespace isolation, retention/decay).
+**Next up is Phase 4** (ecosystem: package registry, SDK, Dapr runner).
 
 **Try the current slice:** after `pnpm install && pnpm build`:
 - `flowforge validate fixtures/Grade7-Maths.workforce` — validate the reference package
@@ -34,6 +34,8 @@ isolation tests, and retention/decay knobs), then Phase 4.
 - `flowforge runs list` — list persisted runs (from `~/.flowforge`)
 - `flowforge audit show` — view audit records; `audit verify` checks chain integrity
 - `flowforge audit show --run <a> --run <b>` — A/B compare personas and scores across two runs
+- `flowforge memory list <packageId>/<agentId> --data-dir ~/.flowforge` — browse an agent's memory items
+- `flowforge memory delete <packageId>/<agentId> <item-id> --data-dir ~/.flowforge` — delete an item ("right to forget")
 
 **Design rules that govern everything below** (see README):
 
@@ -229,11 +231,11 @@ expression of each feature ships in Phase 5.
 
 | # | Task | Done when |
 | --- | --- | --- |
-| 3.3.1 | Chroma (or equivalent) `VectorStore` adapter implementing the existing interface, with real embeddings via a `ModelProvider`-style embedding abstraction | In-memory and Chroma adapters pass the same interface test suite |
+| 3.3.1 | Chroma (or equivalent) `VectorStore` adapter implementing the existing interface, with real embeddings via a `ModelProvider`-style embedding abstraction | In-memory and Chroma adapters pass the same interface test suite ✔ |
 | 3.3.2 | Memory write policy: what gets remembered after each workflow (per-agent, declared in the package) | Memory writes are declarative package config, not code ✔ |
-| 3.3.3 | Memory inspector UI: browse a namespace, see items + metadata, delete items ("right to forget") | Deleting an item verifiably removes it from recall |
-| 3.3.4 | Namespace isolation tests: agent A can never recall agent B's memory; replacing an agent preserves others' memory | Isolation is enforced by tests, not convention |
-| 3.3.5 | Retention/decay knobs (max items, age-out) configurable per namespace | Old memory ages out per config |
+| 3.3.3 | Memory inspector CLI: browse a namespace, see items + metadata, delete items ("right to forget") | `flowforge memory list`/`delete` use `FileVectorStore` when `--data-dir` is given; deleting verifiably removes from recall ✔ |
+| 3.3.4 | Namespace isolation tests: agent A can never recall agent B's memory; replacing an agent preserves others' memory | Isolation is enforced by tests, not convention ✔ |
+| 3.3.5 | Retention/decay knobs (max items, age-out) configurable per namespace | Old memory ages out per config ✔ |
 
 **📚 Learn while you build — vector search & RAG**
 
