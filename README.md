@@ -32,10 +32,14 @@ pnpm install
 pnpm build
 ```
 
+`pnpm install` links the CLI's `flowforge` command into
+`node_modules/.bin/`, so it's available in the repo as **`pnpm exec flowforge`**
+(right away, no extra steps).
+
 Then run a full classroom workflow (teacher → student → teacher, all scripted):
 
 ```bash
-node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment --mock \
+pnpm exec flowforge run fixtures/Grade7-Maths.workforce assignment --mock \
   --answers answers.json
 ```
 
@@ -52,30 +56,42 @@ with `answers.json`:
 The run completes, the audit trail prints, and it's persisted to `~/.flowforge`:
 
 ```bash
-node packages/cli/dist/index.js runs list
-node packages/cli/dist/index.js audit verify
+pnpm exec flowforge runs list
+pnpm exec flowforge audit verify
 ```
+
+**Prefer bare `flowforge`?** Optional one-time setup installs it system-wide so
+you can drop the `pnpm exec`:
+
+```bash
+pnpm setup          # add pnpm's global bin dir to your shell PATH
+pnpm link --global ./packages/cli
+# then open a new terminal and use: flowforge ...
+```
+
+(Or `node packages/cli/dist/index.js …` always works.)
 
 **Prefer a UI?** `pnpm --filter @flowforge/desktop dev` opens the desktop app
 (home, portals, audit viewer, governance, visual workflow editor).
-
-For a friendlier alias throughout this README, use `flowforge` for
-`node packages/cli/dist/index.js`.
 
 ---
 
 ## Getting started (for real use)
 
 1. **Bootstrap & build** (as above).
-2. **Configure** — `flowforge setup` interactively detects your environment and
-   guides you through model provider (local Ollama or a cloud API), models,
-   vector store and identity. It writes a secret-free `flowforge.config.json`
-   (`~/.flowforge/config.json`) and puts API keys in a git-ignored `.env`.
-   `flowforge doctor` prints a read-only health checklist anytime.
+2. **Configure** — `pnpm exec flowforge setup` interactively detects your
+   environment and guides you through model provider (local Ollama or a cloud
+   API), models, vector store and identity. It writes a secret-free
+   `flowforge.config.json` (`~/.flowforge/config.json`) and puts API keys in a
+   git-ignored `.env`. `pnpm exec flowforge doctor` prints a read-only health
+   checklist anytime.
 3. **Run** — commands read the config automatically; drop `--mock` to use your
    real provider. Precedence is flags > env > config.
 
 ## Common commands
+
+> In the table, `flowforge` means `pnpm exec flowforge` (from the repo) — or
+> the system-wide `flowforge` after the optional global setup above.
 
 | Task | Command |
 |---|---|

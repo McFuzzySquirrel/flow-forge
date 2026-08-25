@@ -49,15 +49,21 @@ pnpm build
 pnpm test
 ```
 
-**Readable command.** The CLI binary lives at
-`node packages/cli/dist/index.js`. For the rest of this guide, define an alias
-so the examples are short:
+**Making `flowforge` a command.** `pnpm install` links the CLI binary into
+`node_modules/.bin/`, so **`pnpm exec flowforge …` works inside the repo with no
+extra steps** (the examples below use `flowforge` to keep them short — read it
+as `pnpm exec flowforge`). For a system-wide `flowforge` you can type anywhere,
+run this once:
 
 ```bash
-alias flowforge='node packages/cli/dist/index.js'
+pnpm setup            # add pnpm's global bin directory to your shell PATH
+pnpm link --global ./packages/cli
 ```
 
-> Every `flowforge` command below means `node packages/cli/dist/index.js`.
+then open a new terminal — bare `flowforge …` works from anywhere.
+
+> Every `flowforge` command below means `pnpm exec flowforge …` (from the repo)
+> or the globally-linked `flowforge` — both are the same `node packages/cli/dist/index.js`.
 
 ---
 
@@ -265,6 +271,7 @@ published it. To author your own package from scratch, follow the
 | "Package is not compatible with engine" | The package declares an `engineVersion` range your build doesn't satisfy — upgrade the engine or use a compatible package |
 | Ollama connection refused | `ollama serve`, and confirm the model is pulled (`ollama pull llama3.2`) |
 | Chroma/Dapr services missing | Only needed for those integrations — see [Dapr runner](dapr-runner.md) and `docker compose -f docker/docker-compose.yml up --build` |
+| Desktop app aborts with a `chrome-sandbox` / SUID sandbox error on Linux | Chromium's sandbox needs a root-owned setuid helper that npm installs rarely provide. The dev harness already passes `--no-sandbox` on Linux; for production set it up once: `sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox` |
 
 ---
 

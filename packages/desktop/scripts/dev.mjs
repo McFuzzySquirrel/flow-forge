@@ -14,7 +14,13 @@ if (!url) throw new Error('Vite dev server did not report a local URL');
 console.log(`Renderer dev server: ${url}`);
 
 const electronPath = (await import('electron')).default;
-const child = spawn(electronPath, ['.'], {
+// On Linux, Electron's Chromium sandbox needs a root-owned setuid
+// `chrome-sandbox` helper that npm/pnpm installs rarely provide. Rather than
+// abort, run the *dev* harness with the sandbox disabled (production should
+// set up the helper: `sudo chown root:root chrome-sandbox && sudo chmod 4755
+// chrome-sandbox`).
+const electronArgs = process.platform === 'linux' ? ['.', '--no-sandbox'] : ['.'];
+const child = spawn(electronPath, electronArgs, {
   stdio: 'inherit',
   env: { ...process.env, VITE_DEV_SERVER_URL: url }
 });
