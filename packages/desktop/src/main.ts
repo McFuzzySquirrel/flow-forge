@@ -12,7 +12,7 @@
 import { createServer } from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { DesktopKernel } from './kernel.js';
 import { IpcChannels, type HumanResponse } from './ipc.js';
 import { loadIdentityConfig } from './oidc.js';
@@ -79,6 +79,14 @@ export function registerIpcHandlers(kernel: DesktopKernel): void {
   ipcMain.handle(IpcChannels.loadPackage, (_event, packageDir: string) => kernel.loadPackage(packageDir));
   ipcMain.handle(IpcChannels.listPackages, () => kernel.listPackages());
   ipcMain.handle(IpcChannels.removePackage, (_event, packageId: string) => kernel.removePackage(packageId));
+  ipcMain.handle(IpcChannels.selectPackage, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Select a workforce package',
+      properties: ['openDirectory', 'openFile'],
+      filters: [{ name: 'Workforce packages', extensions: ['workforce'] }]
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
   ipcMain.handle(IpcChannels.installWorkflowArchive, (_event, archivePath: string) =>
     kernel.installWorkforceArchive(archivePath)
   );

@@ -12,6 +12,7 @@ export const IpcChannels = {
   loadPackage: 'flowforge:load-package',
   listPackages: 'flowforge:list-packages',
   removePackage: 'flowforge:remove-package',
+  selectPackage: 'flowforge:select-package',
   installWorkflowArchive: 'flowforge:install-workflow-archive',
   getWorkflow: 'flowforge:get-workflow',
   startRun: 'flowforge:start-run',
@@ -67,6 +68,11 @@ export interface FlowForgeApi {
   loadPackage(packageDir: string): Promise<PackageSummary>;
   listPackages(): Promise<PackageSummary[]>;
   removePackage(packageId: string): Promise<void>;
+  /**
+   * Open a native picker (main-process `dialog`) to choose a `.workforce`
+   * directory or archive. Resolves undefined if the user cancels.
+   */
+  selectPackagePath(): Promise<string | undefined>;
   /** Install from a `.workforce` archive: verifies integrity + signature first. */
   installWorkflowArchive(archivePath: string): Promise<PackageSummary>;
 

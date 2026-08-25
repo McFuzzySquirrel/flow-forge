@@ -162,13 +162,16 @@ pnpm --filter @flowforge/desktop dev
 
 It opens a window with:
 
-- **Home / Workforce** — install a package (type the path to a
-  `...workforce` directory or a `.workforce` archive), see its branding, agent
-  roster and workflows.
-- **Teacher portal** — start a workflow, watch live progress, answer
-  human-input and human-approval steps, and see failure cards.
-- **Learner portal** — a task inbox filtered to the signed-in user's roles,
-  plus feedback with "why?" links straight into the audit record for every mark.
+- **Home / Workforce** — install a package (pick it with the **Browse…** button,
+  or type a path to a `...workforce` directory or a `.workforce` archive), see
+  its branding, agent roster and workflows.
+- **Runs** — start a workflow from any installed package, watch live progress,
+  answer human-input and human-approval steps, and see failure cards.
+- **Per-role portals** — one portal per human role in the installed packages
+  (Teacher, Student, HR, Employee, Compliance Officer, Manager — whatever the
+  package declares). Each shows that role's task inbox and feedback with
+  "why?" links straight into the audit record for every mark. Swap the package
+  and the portal list changes with it.
 - **Audit viewer** — chronological records, a chain-verify button, filters and
   JSON export.
 - **Governance** — identity providers, role mappings and a per-user audit table.

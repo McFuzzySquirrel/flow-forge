@@ -14,7 +14,14 @@ function statusLabel(status: RunSnapshot['status']): string {
   }
 }
 
-export function TeacherView({ packages }: { packages: PackageSummary[] }) {
+/**
+ * Runs — the generic operator portal. Start workflows from any installed
+ * package, watch live progress, drive the human steps as they pause, and see
+ * failures. Role-specific task inboxes live in the per-role portals; the
+ * kernel enforces authorization here (an attempted resume with the wrong role
+ * surfaces as an audited denial card).
+ */
+export function RunsView({ packages }: { packages: PackageSummary[] }) {
   const [packageId, setPackageId] = useState('');
   const [workflowId, setWorkflowId] = useState('');
   const [runs, setRuns] = useState<RunSnapshot[]>([]);
@@ -79,7 +86,7 @@ export function TeacherView({ packages }: { packages: PackageSummary[] }) {
 
   return (
     <div>
-      <h1 className="ff-page-title">Teacher portal</h1>
+      <h1 className="ff-page-title">Runs</h1>
       <p className="ff-page-sub">
         Start runs from an installed package and drive the human steps as they pause.
       </p>

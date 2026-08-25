@@ -4,10 +4,27 @@ import type { AuditTrailSnapshot, HumanResponse, RunSnapshot, UserSnapshot } fro
 import { errorMessage, Empty, ErrorInline, shortId } from './common.js';
 import { TaskForm } from './TaskForm.js';
 
-export function LearnerView({
+/** Title-case a workflow role for display, e.g. 'compliance-officer' → 'Compliance Officer'. */
+export function roleLabel(role: string): string {
+  return role
+    .split(/[-_ ]/)
+    .filter(Boolean)
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * A per-role participant portal. Shows the task inbox for one workflow role
+ * (runs paused waiting for that role) plus feedback for completed runs with
+ * audit "why?" links. The role list is derived from installed packages — swap
+ * the package and these portals change with it.
+ */
+export function RolePortalView({
+  role,
   user,
   openAudit
 }: {
+  role: string;
   user?: UserSnapshot;
   openAudit: (filter: { runId?: string; actor?: string }) => void;
 }) {
@@ -31,16 +48,10 @@ export function LearnerView({
   }, []);
 
   useEffect(() => {
-    if (user) void refresh();
-  }, [user, refresh]);
+    void refresh();
+  }, [refresh]);
 
-  const roles = user?.roles ?? [];
-
-  const inbox = useMemo(
-    () =>
-      runs.filter((run) => run.pending && run.pending.role && roles.includes(run.pending.role)),
-    [runs, roles]
-  );
+  const inbox = useMemo(() => runs.filter((run) => run.pending?.role === role), [runs, role]);
 
   const completed = useMemo(() => runs.filter((run) => run.status === 'completed'), [runs]);
 
@@ -54,6 +65,8 @@ export function LearnerView({
     }
     return byRun;
   }, [trail]);
+
+  const canAct = user?.roles.includes(role) ?? false;
 
   const resume = async (runId: string, response: HumanResponse) => {
     setBusyRunId(runId);
@@ -69,26 +82,21 @@ export function LearnerView({
     }
   };
 
-  if (!user) {
-    return (
-      <div>
-        <h1 className="ff-page-title">Learner portal</h1>
-        <p className="ff-page-sub">Your task inbox appears here once you are signed in.</p>
-        <div className="ff-card">
-          <div className="ff-card-body">
-            <Empty>Not signed in — use the Identity view to sign in as one of the workflow roles.</Empty>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div>
-      <h1 className="ff-page-title">Learner portal</h1>
+      <h1 className="ff-page-title">{roleLabel(role)} portal</h1>
       <p className="ff-page-sub">
-        Signed in as <strong>{user.displayName ?? user.id}</strong> ({user.roles.join(', ')} via {user.provider}).
-        The inbox below filters to tasks for your roles; the kernel enforces the real authorization.
+        Tasks waiting for the <strong className="ff-tag">{role}</strong> role.
+        {user ? (
+          <>
+            {' '}
+            Signed in as <strong>{user.displayName ?? user.id}</strong>
+            {canAct ? ' — you can act on these.' : ` (not signed in with the ${role} role).`}
+          </>
+        ) : (
+          ' Sign in as this role in the Identity view to act.'
+        )}{' '}
+        The kernel enforces the real authorization.
       </p>
 
       <ErrorInline error={error} />
@@ -98,7 +106,7 @@ export function LearnerView({
         {inbox.length === 0 ? (
           <div className="ff-card">
             <div className="ff-card-body">
-              <Empty>No pending tasks for your roles.</Empty>
+              <Empty>No pending tasks for this role.</Empty>
             </div>
           </div>
         ) : (
