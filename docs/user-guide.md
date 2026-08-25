@@ -49,20 +49,21 @@ pnpm build
 pnpm test
 ```
 
-**Making `flowforge` a command.** The CLI binary lives at
-`node packages/cli/dist/index.js`; `pnpm install` also links it into
-`node_modules/.bin/`, so `pnpm exec flowforge …` works inside the repo. To get a
-system-wide `flowforge` command, run once:
+**Making `flowforge` a command.** `pnpm install` links the CLI binary into
+`node_modules/.bin/`, so **`pnpm exec flowforge …` works inside the repo with no
+extra steps** (the examples below use `flowforge` to keep them short — read it
+as `pnpm exec flowforge`). For a system-wide `flowforge` you can type anywhere,
+run this once:
 
 ```bash
 pnpm setup            # add pnpm's global bin directory to your shell PATH
 pnpm link --global ./packages/cli
 ```
 
-then open a new terminal — `flowforge …` works from anywhere.
+then open a new terminal — bare `flowforge …` works from anywhere.
 
-> Every `flowforge` command below means `node packages/cli/dist/index.js`
-> (or `pnpm exec flowforge …` / the globally-linked `flowforge`).
+> Every `flowforge` command below means `pnpm exec flowforge …` (from the repo)
+> or the globally-linked `flowforge` — both are the same `node packages/cli/dist/index.js`.
 
 ---
 
