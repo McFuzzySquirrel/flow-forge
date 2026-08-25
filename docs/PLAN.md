@@ -279,6 +279,40 @@ The visual editor itself ships in Phase 5.
 - Chroma-backed memory passes the shared `VectorStore` test suite.
 - `flowforge validate --graph` catches unreachable nodes and dangling edges; exit code is CI-friendly.
 
+### Milestone 3.5 — Interactive setup & doctor *(landed as the "install everything" flow)*
+
+Onboarding was the roughest part of the platform: provider choice, model pulls, vector store and
+identity were scattered across env vars, flags and manual install steps. This milestone turns
+"install everything I need" into one guided command.
+
+| # | Task | Done when |
+| --- | --- | --- |
+| 3.5.1 | `flowforge doctor` — read-only health checks (node, pnpm, deps, build, Ollama, Docker) | Prints a `✔/⚠/✘` checklist; exits 1 on a hard failure ✔ |
+| 3.5.2 | `flowforge setup` — interactive wizard for provider (Ollama/DeepSeek/OpenAI-compatible/hybrid), model pulls, vector store and identity | Every choice is validated live where possible; mutating actions (ollama pull, docker run) only run behind confirmation ✔ |
+| 3.5.3 | `flowforge setup --non-interactive` with flags for scripting | Same result as interactive, no TTY required; missing required values fail fast ✔ |
+| 3.5.4 | `flowforge.config.json` — typed, secret-free config read by `run`/`runs`/`audit`/`memory`; precedence flags > env > repo config > user config > defaults | Config written by setup is honoured by all CLI commands; secrets never stored in config ✔ |
+| 3.5.5 | Secrets handling — API keys written to a git-ignored `.env`, guarded against entering the config | `saveConfig`/`readConfigFile` reject any secret key; `.env` added to `.gitignore` ✔ |
+
+**📚 Learn while you build — setup as a first-class experience**
+
+- The chicken-and-egg problem is irreducible: a CLI must exist before it can configure the repo. The
+  split is *three manual commands* (`corepack enable`, `pnpm install`, `pnpm build`) and then
+  *everything else is interactive*. Automating the first three would mean shipping a second
+  installer — more surface area for no real gain.
+- Config precedence (flag > env > config > default) mirrors the standard "concrete overrides
+  general" rule (12-factor config layering). Putting secrets in `.env` and non-secrets in JSON keeps
+  the committed config safe and diff-friendly.
+- Doctor checks are the same idea as `terraform plan`'s validation and `cargo doctor`: make the
+  environment's state visible before mutating it. Detection is read-only; every mutation is an
+  explicit, confirmed step.
+
+### Phase 3.5 exit criteria
+
+- `flowforge setup --non-interactive --provider ollama` produces a working config with zero prompts.
+- `flowforge doctor` passes on a freshly bootstrapped repo.
+- Cloud provider keys never appear in `flowforge.config.json`; `.env` is git-ignored.
+- Full `pnpm test` suite (including new CLI config/setup tests) passes.
+
 ---
 
 ## Phase 4 — Ecosystem

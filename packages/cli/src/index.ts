@@ -26,10 +26,20 @@ import type { IdentityConfig } from '@flowforge/core';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
 import { AuditLog } from '@flowforge/audit';
 import { FileVectorStore, MemoryService } from '@flowforge/memory';
-import { AgentRuntime, MockModelProvider, ModelRegistry, OllamaProvider } from '@flowforge/agents';
+import {
+  AgentRuntime,
+  DeepSeekProvider,
+  MockModelProvider,
+  ModelRegistry,
+  OllamaProvider,
+  OpenAICompatibleProvider
+} from '@flowforge/agents';
 import { IdentityService, MockIdentityProvider } from '@flowforge/identity';
 import { WorkflowEngine } from '@flowforge/workflow';
 import { FlowForgeKernel } from '@flowforge/kernel';
+import { prompt } from './io.js';
+import { loadConfig, type FlowForgeConfig } from './config.js';
+import { doctorChecks, printChecks, runSetup } from './setup.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,12 +49,11 @@ function defaultDataDir(): string {
   return join(homedir(), '.flowforge');
 }
 
-async function prompt(question: string): Promise<string> {
-  const { createInterface } = await import('node:readline/promises');
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await rl.question(question);
-  rl.close();
-  return answer;
+/** Data dir from an explicit flag, else the configured vector store, else ~/.flowforge. */
+function resolveDataDir(override: string | undefined, config: FlowForgeConfig): string {
+  if (override) return override;
+  if (config.vectorStore.type === 'file') return config.vectorStore.dataDir;
+  return defaultDataDir();
 }
 
 /** Dev identity: one mock user per workflow role. */
@@ -168,6 +177,72 @@ export function inspectCommand(packageDir: string): number {
 // run
 // ---------------------------------------------------------------------------
 
+/** Resolve a model provider from the `--provider`/`--api-key` flags, env or config (default Ollama). */
+function resolveProvider(
+  providerName: string | undefined,
+  apiKey: string | undefined,
+  config: FlowForgeConfig
+): import('@flowforge/agents').ModelProvider {
+  const key = apiKey ?? process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
+  switch (providerName) {
+    case 'deepseek':
+      if (!key) throw new Error('DeepSeek requires an API key (--api-key or DEEPSEEK_API_KEY)');
+      return new DeepSeekProvider(key);
+    case 'openai': {
+      if (!key) throw new Error('OpenAI requires an API key (--api-key or OPENAI_API_KEY)');
+      const cloud = config.provider.cloud;
+      return new OpenAICompatibleProvider(
+        cloud?.baseUrl ?? 'https://api.openai.com/v1',
+        key,
+        cloud?.model ?? 'gpt-4o-mini'
+      );
+    }
+    case undefined:
+    case 'ollama': {
+      const ollama = config.provider.ollama;
+      return new OllamaProvider(ollama?.url ?? 'http://localhost:11434', ollama?.model ?? 'llama3.2');
+    }
+    case 'hybrid':
+      throw new Error("'hybrid' is resolved per tier; run 'flowforge setup' to configure a hybrid mapping");
+    default:
+      throw new Error(`Unknown provider '${providerName}' (expected 'ollama', 'deepseek', 'openai' or 'hybrid')`);
+  }
+}
+
+/** Build a ModelRegistry honouring a per-tier hybrid mapping from config. */
+function resolveModelRegistry(
+  providerName: string | undefined,
+  apiKey: string | undefined,
+  config: FlowForgeConfig
+): ModelRegistry {
+  const name = providerName ?? process.env.FLOWFORGE_PROVIDER ?? config.provider.type;
+  const registry = new ModelRegistry();
+  if (name === 'hybrid') {
+    const hybrid = config.provider.hybrid;
+    if (!hybrid) throw new Error("'hybrid' selected but config.provider.hybrid is missing (run 'flowforge setup')");
+    const key = apiKey ?? process.env.OPENAI_API_KEY;
+    const tiers = ['small', 'medium', 'large'] as const;
+    for (const tier of tiers) {
+      const spec = hybrid[tier];
+      if (!spec) throw new Error(`Hybrid mapping is missing tier '${tier}'`);
+      let provider: import('@flowforge/agents').ModelProvider;
+      if (spec.type === 'ollama') {
+        provider = new OllamaProvider(config.provider.ollama?.url ?? 'http://localhost:11434', spec.model);
+      } else {
+        if (!key) throw new Error('Cloud tier requires an API key (--api-key or OPENAI_API_KEY)');
+        provider = new OpenAICompatibleProvider(
+          config.provider.cloud?.baseUrl ?? 'https://api.openai.com/v1',
+          key,
+          spec.model
+        );
+      }
+      registry.set(tier, provider);
+    }
+    return registry;
+  }
+  return registry.set('small', resolveProvider(name, apiKey, config)).set('medium', resolveProvider(name, apiKey, config)).set('large', resolveProvider(name, apiKey, config));
+}
+
 export async function runCommand(
   packageDir: string,
   workflowId: string,
@@ -178,6 +253,9 @@ export async function runCommand(
     dataDir?: string;
     watch?: boolean;
     persona?: string;
+    provider?: string;
+    apiKey?: string;
+    config?: string;
   } = {}
 ): Promise<number> {
   const pkg = loadWorkforcePackage(packageDir);
@@ -200,8 +278,11 @@ export async function runCommand(
 
   const provider = options.mock
     ? new MockModelProvider(() => JSON.stringify({ note: 'mock response' }))
-    : new OllamaProvider();
-  const models = new ModelRegistry().set('small', provider).set('medium', provider).set('large', provider);
+    : undefined;
+  const config = loadConfig(options.config);
+  const models = options.mock
+    ? new ModelRegistry().set('small', provider!).set('medium', provider!).set('large', provider!)
+    : resolveModelRegistry(options.provider, options.apiKey, config);
   const audit = new AuditLog();
   const engine = new WorkflowEngine(new AgentRuntime(pkg, models, new MemoryService(), audit), audit);
 
@@ -296,21 +377,19 @@ export async function runCommand(
   }
 
   // Persist run to dataDir when requested.
-  if (options.dataDir) {
-    const kernel = new FlowForgeKernel({ dataDir: options.dataDir });
+  if (options.dataDir || config.vectorStore.type === 'file') {
+    const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, config) });
     kernel.loadPackage(packageDir);
-    console.log(`\n✔ Run persisted to ${options.dataDir}`);
-  }
-
-  return run.status === 'completed' ? 0 : 1;
+    console.log(`\n✔ Run persisted to ${resolveDataDir(options.dataDir, config)}`);
+  }  return run.status === 'completed' ? 0 : 1;
 }
 
 // ---------------------------------------------------------------------------
 // runs list / runs show
 // ---------------------------------------------------------------------------
 
-export function runsListCommand(options: { dataDir?: string; packageId?: string }): number {
-  const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+export function runsListCommand(options: { dataDir?: string; packageId?: string; config?: string }): number {
+  const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, loadConfig(options.config)) });
   const runs = kernel.listRuns(options.packageId);
   if (runs.length === 0) {
     console.log('No runs found.');
@@ -326,8 +405,8 @@ export function runsListCommand(options: { dataDir?: string; packageId?: string 
   return 0;
 }
 
-export async function runsShowCommand(runId: string, options: { dataDir?: string }): Promise<number> {
-  const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+export async function runsShowCommand(runId: string, options: { dataDir?: string; config?: string }): Promise<number> {
+  const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, loadConfig(options.config)) });
   const run = await kernel.getRun(runId);
   if (!run) {
     console.error(`✘ Run '${runId}' not found.`);
@@ -347,8 +426,9 @@ export function auditShowCommand(options: {
   actor?: string;
   action?: string;
   dataDir?: string;
+  config?: string;
 }): number {
-  const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+  const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, loadConfig(options.config)) });
   const runIds = [
     ...(options.runId ? [options.runId] : []),
     ...(options.runIds ?? [])
@@ -427,8 +507,8 @@ export function auditShowCommand(options: {
   return trail.chainIntact ? 0 : 1;
 }
 
-export function auditVerifyCommand(options: { dataDir?: string }): number {
-  const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+export function auditVerifyCommand(options: { dataDir?: string; config?: string }): number {
+  const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, loadConfig(options.config)) });
   const trail = kernel.getAuditTrail();
   if (trail.chainIntact) {
     console.log(`✔ Audit chain intact (${trail.records.length} records).`);
@@ -442,8 +522,9 @@ export function auditExportCommand(options: {
   runId?: string;
   outputPath?: string;
   dataDir?: string;
+  config?: string;
 }): number {
-  const kernel = new FlowForgeKernel({ dataDir: options.dataDir ?? defaultDataDir() });
+  const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, loadConfig(options.config)) });
   const trail = kernel.getAuditTrail(options.runId ? { runId: options.runId } : undefined);
   const json = JSON.stringify(trail.records, null, 2);
   if (options.outputPath) {
@@ -461,9 +542,10 @@ export function auditExportCommand(options: {
 
 export async function memoryListCommand(
   namespace: string,
-  options: { dataDir?: string }
+  options: { dataDir?: string; config?: string }
 ): Promise<number> {
-  const store = options.dataDir ? new FileVectorStore(options.dataDir) : undefined;
+  const dataDir = resolveDataDir(options.dataDir, loadConfig(options.config));
+  const store = new FileVectorStore(dataDir);
   const memory = new MemoryService(store);
   const items = await memory.list(namespace);
   if (items.length === 0) {
@@ -480,9 +562,9 @@ export async function memoryListCommand(
 export async function memoryDeleteCommand(
   namespace: string,
   itemId: string,
-  options: { dataDir?: string }
+  options: { dataDir?: string; config?: string }
 ): Promise<number> {
-  const store = options.dataDir ? new FileVectorStore(options.dataDir) : undefined;
+  const store = new FileVectorStore(resolveDataDir(options.dataDir, loadConfig(options.config)));
   const memory = new MemoryService(store);
   await memory.forget(namespace, itemId);
   console.log(`✔ Deleted item '${itemId}' from namespace '${namespace}'.`);
@@ -497,6 +579,28 @@ function usage(): void {
   console.log(`FlowForge — Agent Workforce Platform CLI
 
 Usage:
+  flowforge setup [options]
+      Interactively configure providers, models, vector store and identity.
+      --non-interactive        Do not prompt; read every value from flags/config.
+      --provider <name>        ollama (default), deepseek, openai or hybrid.
+      --api-key <key>          API key for cloud providers (also written to .env).
+      --ollama-url <url>       Ollama server URL (default: http://localhost:11434).
+      --ollama-model <model>   Default chat model (default: llama3.2).
+      --embedding-model <m>    Embedding model (default: nomic-embed-text).
+      --cloud-url <url>        OpenAI-compatible base URL.
+      --cloud-model <model>    Default cloud model (default: gpt-4o-mini).
+      --vector-store <type>    file (default) or chroma.
+      --chroma-url <url>       Chroma URL (default: http://localhost:8000).
+      --data-dir <dir>         File-backed data directory (default: ~/.flowforge).
+      --identity-mode <mode>   dev (default) or oidc.
+      --oidc-config <path>     OIDC identity config JSON (for --identity-mode oidc).
+      --config <path>          Write config here (default: ~/.flowforge/config.json).
+      --apply                  Allow mutating actions (ollama pull, docker run).
+      --skip-validation        Skip live provider connectivity checks.
+
+  flowforge doctor
+      Print a read-only environment health check (node, pnpm, build, ollama).
+
   flowforge validate <package-dir>
       Validate a .workforce package.
       --graph                  Also validate workflow graph reachability.
@@ -507,32 +611,35 @@ Usage:
   flowforge run <package-dir> <workflow-id> [options]
       Run a workflow (interactive via stdin by default).
       --mock                   Use the mock model provider.
+      --provider <name>        Model provider: ollama (default), deepseek, openai, hybrid.
+      --api-key <key>          API key for cloud providers (or DEEPSEEK_API_KEY / OPENAI_API_KEY env).
       --answers <file.json>    Non-interactive mode: supply answers as a JSON
                                array (each element answers the next human step).
       --watch                  Print progress as the run advances.
       --identity <config.json> Sign users in via OIDC device flow.
       --persona <id>           Override the run persona for agent steps.
-      --data-dir <dir>         Persist run state (default: ~/.flowforge).
+      --data-dir <dir>         Persist run state (default: from config, else ~/.flowforge).
+      --config <path>          Read config from this file instead of repo/user defaults.
 
-  flowforge runs list [--package <id>] [--data-dir <dir>]
+  flowforge runs list [--package <id>] [--data-dir <dir>] [--config <path>]
       List persisted runs.
 
-  flowforge runs show <run-id> [--data-dir <dir>]
+  flowforge runs show <run-id> [--data-dir <dir>] [--config <path>]
       Show details for a persisted run.
 
-  flowforge audit show [--run <id>] [--actor <id>] [--action <action>] [--data-dir <dir>]
+  flowforge audit show [--run <id>] [--actor <id>] [--action <action>] [--data-dir <dir>] [--config <path>]
       Show audit records (optionally filtered).
 
-  flowforge audit verify [--data-dir <dir>]
+  flowforge audit verify [--data-dir <dir>] [--config <path>]
       Verify hash-chain integrity of the audit log.
 
-  flowforge audit export [--run <id>] [--output <file>] [--data-dir <dir>]
+  flowforge audit export [--run <id>] [--output <file>] [--data-dir <dir>] [--config <path>]
       Export audit records as JSON.
 
-  flowforge memory list <namespace> [--data-dir <dir>]
+  flowforge memory list <namespace> [--data-dir <dir>] [--config <path>]
       List memory items in a namespace.
 
-  flowforge memory delete <namespace> <item-id> [--data-dir <dir>]
+  flowforge memory delete <namespace> <item-id> [--data-dir <dir>] [--config <path>]
       Delete a memory item from a namespace.
 `);
 }
@@ -591,7 +698,7 @@ function positionals(args: string[], ...flagNames: string[]): string[] {
   return result;
 }
 
-const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona'];
+const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona', '--provider', '--api-key', '--config', '--ollama-url', '--ollama-model', '--embedding-model', '--cloud-url', '--cloud-model', '--vector-store', '--chroma-url', '--identity-mode', '--oidc-config'];
 
 const [, , command, subOrArg, ...rest] = process.argv;
 const allArgs = subOrArg !== undefined ? [subOrArg, ...rest] : [];
@@ -626,7 +733,10 @@ if (isDirectRun) {
         answersPath: flag(allArgs, '--answers'),
         dataDir: flag(allArgs, '--data-dir'),
         watch: hasFlag(allArgs, '--watch'),
-        persona: flag(allArgs, '--persona')
+        persona: flag(allArgs, '--persona'),
+        provider: flag(allArgs, '--provider'),
+        apiKey: flag(allArgs, '--api-key'),
+        config: flag(allArgs, '--config')
       }).then((code) => process.exit(code));
       break;
     }
@@ -635,12 +745,12 @@ if (isDirectRun) {
       const sub = subOrArg;
       if (sub === 'list') {
         process.exit(
-          runsListCommand({ dataDir: flag(rest, '--data-dir'), packageId: flag(rest, '--package') })
+          runsListCommand({ dataDir: flag(rest, '--data-dir'), packageId: flag(rest, '--package'), config: flag(rest, '--config') })
         );
       } else if (sub === 'show') {
         const runId = rest.find((a) => !a.startsWith('--'));
         if (!runId) { usage(); process.exit(1); }
-        runsShowCommand(runId, { dataDir: flag(rest, '--data-dir') }).then((code) => process.exit(code));
+        runsShowCommand(runId, { dataDir: flag(rest, '--data-dir'), config: flag(rest, '--config') }).then((code) => process.exit(code));
       } else {
         usage();
         process.exit(1);
@@ -656,17 +766,19 @@ if (isDirectRun) {
             runIds: flags(rest, '--run'),
             actor: flag(rest, '--actor'),
             action: flag(rest, '--action'),
-            dataDir: flag(rest, '--data-dir')
+            dataDir: flag(rest, '--data-dir'),
+            config: flag(rest, '--config')
           })
         );
       } else if (sub === 'verify') {
-        process.exit(auditVerifyCommand({ dataDir: flag(rest, '--data-dir') }));
+        process.exit(auditVerifyCommand({ dataDir: flag(rest, '--data-dir'), config: flag(rest, '--config') }));
       } else if (sub === 'export') {
         process.exit(
           auditExportCommand({
             runId: flag(rest, '--run'),
             outputPath: flag(rest, '--output'),
-            dataDir: flag(rest, '--data-dir')
+            dataDir: flag(rest, '--data-dir'),
+            config: flag(rest, '--config')
           })
         );
       } else {
@@ -681,12 +793,12 @@ if (isDirectRun) {
       const pos = positionals(rest, ...VALUE_FLAGS);
       if (sub === 'list') {
         if (!pos[0]) { usage(); process.exit(1); }
-        memoryListCommand(pos[0], { dataDir: flag(rest, '--data-dir') }).then((code) =>
+        memoryListCommand(pos[0], { dataDir: flag(rest, '--data-dir'), config: flag(rest, '--config') }).then((code) =>
           process.exit(code)
         );
       } else if (sub === 'delete') {
         if (!pos[0] || !pos[1]) { usage(); process.exit(1); }
-        memoryDeleteCommand(pos[0], pos[1], { dataDir: flag(rest, '--data-dir') }).then((code) =>
+        memoryDeleteCommand(pos[0], pos[1], { dataDir: flag(rest, '--data-dir'), config: flag(rest, '--config') }).then((code) =>
           process.exit(code)
         );
       } else {
@@ -695,6 +807,34 @@ if (isDirectRun) {
       }
       break;
     }
+
+    case 'setup':
+      runSetup({
+        nonInteractive: hasFlag(allArgs, '--non-interactive'),
+        configPath: flag(allArgs, '--config'),
+        provider: flag(allArgs, '--provider') as 'ollama' | 'deepseek' | 'openai' | 'hybrid' | undefined,
+        apiKey: flag(allArgs, '--api-key'),
+        ollamaUrl: flag(allArgs, '--ollama-url'),
+        ollamaModel: flag(allArgs, '--ollama-model'),
+        embeddingModel: flag(allArgs, '--embedding-model'),
+        cloudBaseUrl: flag(allArgs, '--cloud-url'),
+        cloudModel: flag(allArgs, '--cloud-model'),
+        vectorStore: flag(allArgs, '--vector-store') as 'file' | 'chroma' | undefined,
+        chromaUrl: flag(allArgs, '--chroma-url'),
+        dataDir: flag(allArgs, '--data-dir'),
+        identityMode: flag(allArgs, '--identity-mode') as 'dev' | 'oidc' | undefined,
+        identityConfigPath: flag(allArgs, '--oidc-config'),
+        apply: hasFlag(allArgs, '--apply'),
+        skipValidation: hasFlag(allArgs, '--skip-validation')
+      }).then((code) => process.exit(code));
+      break;
+
+    case 'doctor':
+      doctorChecks().then((checks) => {
+        printChecks(checks);
+        process.exit(checks.some((c) => c.status === 'fail') ? 1 : 0);
+      });
+      break;
 
     default:
       usage();

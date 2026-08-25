@@ -22,7 +22,7 @@
 packages/
   core/                @flowforge/core      — domain types + the six JSON Schemas + validator
   workforce-packages/  @flowforge/packages  — .workforce package loader & cross-reference validation
-  agents/              @flowforge/agents    — agent runtime + model provider abstraction (mock / Ollama / OpenAI-compatible)
+  agents/              @flowforge/agents    — agent runtime + model provider abstraction (mock / Ollama / DeepSeek / OpenAI-compatible)
   memory/              @flowforge/memory    — per-agent memory service (swappable vector store)
   audit/               @flowforge/audit     — append-only, hash-chained audit log
   workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching)
@@ -36,10 +36,29 @@ fixtures/
 ## Getting started
 
 ```bash
+# 1. bootstrap (needs Node 20+; installs pnpm 11.5.2, deps, and compiles all packages)
+corepack enable && corepack prepare pnpm@11.5.2 --activate
 pnpm install
 pnpm build
-pnpm test
 
+# 2. interactive setup — detects your environment and guides you through
+#    provider, models, vector store and identity choices (also: `flowforge doctor`)
+node packages/cli/dist/index.js setup
+
+# 3. run the test suite (all mock-model, offline)
+pnpm test
+```
+
+The interactive `setup` prompts you for a model provider (local Ollama or a cloud API),
+offers to pull recommended Ollama models, chooses a vector store (file-backed by default,
+Chroma if you prefer), and identity mode. It writes a `flowforge.config.json` (default
+`~/.flowforge/config.json`) and, for cloud providers, your API key to a git-ignored `.env`.
+Run `flowforge setup --non-interactive` to script it from flags.
+
+Once configured, all commands below pick up the provider, models and data directory from
+config automatically — pass `--provider`/`--api-key`/`--data-dir` to override per-run.
+
+```bash
 # validate & explore the reference package
 node packages/cli/dist/index.js validate fixtures/Grade7-Maths.workforce
 node packages/cli/dist/index.js validate fixtures/Grade7-Maths.workforce --graph
@@ -78,7 +97,7 @@ pnpm --filter @flowforge/desktop dev
 The reasoning behind these and other foundational decisions is captured as Architecture Decision
 Records in [docs/adr/](docs/adr/README.md).
 
-A comprehensive guide to running tests and wiring up real LLM providers (Ollama, OpenAI-compatible,
+A comprehensive guide to running tests and wiring up real LLM providers (Ollama, DeepSeek, OpenAI-compatible,
 or custom) lives in [docs/testing.md](docs/testing.md).
 
 A history of all notable changes lives in [CHANGELOG.md](CHANGELOG.md).
