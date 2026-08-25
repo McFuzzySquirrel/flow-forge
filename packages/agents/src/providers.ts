@@ -61,7 +61,7 @@ export class OllamaProvider implements ModelProvider {
 
 /** Cloud models via any OpenAI-compatible chat completions API. */
 export class OpenAICompatibleProvider implements ModelProvider {
-  readonly name = 'openai-compatible';
+  readonly name: string = 'openai-compatible';
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string,
@@ -81,6 +81,14 @@ export class OpenAICompatibleProvider implements ModelProvider {
     if (!response.ok) throw new Error(`Model request failed: ${response.status}`);
     const data = (await response.json()) as { choices: { message: { content: string } }[] };
     return { content: data.choices[0]?.message.content ?? '', model };
+  }
+}
+
+/** Cloud models via the DeepSeek OpenAI-compatible chat completions API. */
+export class DeepSeekProvider extends OpenAICompatibleProvider {
+  readonly name = 'deepseek';
+  constructor(apiKey: string, defaultModel = 'deepseek-chat') {
+    super('https://api.deepseek.com', apiKey, defaultModel);
   }
 }
 

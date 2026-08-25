@@ -26,7 +26,14 @@ import type { IdentityConfig } from '@flowforge/core';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
 import { AuditLog } from '@flowforge/audit';
 import { FileVectorStore, MemoryService } from '@flowforge/memory';
-import { AgentRuntime, MockModelProvider, ModelRegistry, OllamaProvider } from '@flowforge/agents';
+import {
+  AgentRuntime,
+  DeepSeekProvider,
+  MockModelProvider,
+  ModelRegistry,
+  OllamaProvider,
+  OpenAICompatibleProvider
+} from '@flowforge/agents';
 import { IdentityService, MockIdentityProvider } from '@flowforge/identity';
 import { WorkflowEngine } from '@flowforge/workflow';
 import { FlowForgeKernel } from '@flowforge/kernel';
@@ -168,6 +175,27 @@ export function inspectCommand(packageDir: string): number {
 // run
 // ---------------------------------------------------------------------------
 
+/** Resolve a model provider from the `--provider`/`--api-key` flags (default Ollama). */
+function resolveProvider(
+  providerName: string | undefined,
+  apiKey: string | undefined
+): import('@flowforge/agents').ModelProvider {
+  const key = apiKey ?? process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
+  switch (providerName) {
+    case 'deepseek':
+      if (!key) throw new Error('DeepSeek requires an API key (--api-key or DEEPSEEK_API_KEY)');
+      return new DeepSeekProvider(key);
+    case 'openai':
+      if (!key) throw new Error('OpenAI requires an API key (--api-key or OPENAI_API_KEY)');
+      return new OpenAICompatibleProvider('https://api.openai.com/v1', key, 'gpt-4o-mini');
+    case undefined:
+    case 'ollama':
+      return new OllamaProvider();
+    default:
+      throw new Error(`Unknown provider '${providerName}' (expected 'ollama', 'deepseek' or 'openai')`);
+  }
+}
+
 export async function runCommand(
   packageDir: string,
   workflowId: string,
@@ -178,6 +206,8 @@ export async function runCommand(
     dataDir?: string;
     watch?: boolean;
     persona?: string;
+    provider?: string;
+    apiKey?: string;
   } = {}
 ): Promise<number> {
   const pkg = loadWorkforcePackage(packageDir);
@@ -200,7 +230,7 @@ export async function runCommand(
 
   const provider = options.mock
     ? new MockModelProvider(() => JSON.stringify({ note: 'mock response' }))
-    : new OllamaProvider();
+    : resolveProvider(options.provider, options.apiKey);
   const models = new ModelRegistry().set('small', provider).set('medium', provider).set('large', provider);
   const audit = new AuditLog();
   const engine = new WorkflowEngine(new AgentRuntime(pkg, models, new MemoryService(), audit), audit);
@@ -507,6 +537,8 @@ Usage:
   flowforge run <package-dir> <workflow-id> [options]
       Run a workflow (interactive via stdin by default).
       --mock                   Use the mock model provider.
+      --provider <name>        Model provider: ollama (default), deepseek, openai.
+      --api-key <key>          API key for cloud providers (or DEEPSEEK_API_KEY / OPENAI_API_KEY env).
       --answers <file.json>    Non-interactive mode: supply answers as a JSON
                                array (each element answers the next human step).
       --watch                  Print progress as the run advances.
@@ -591,7 +623,7 @@ function positionals(args: string[], ...flagNames: string[]): string[] {
   return result;
 }
 
-const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona'];
+const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona', '--provider', '--api-key'];
 
 const [, , command, subOrArg, ...rest] = process.argv;
 const allArgs = subOrArg !== undefined ? [subOrArg, ...rest] : [];
@@ -626,7 +658,9 @@ if (isDirectRun) {
         answersPath: flag(allArgs, '--answers'),
         dataDir: flag(allArgs, '--data-dir'),
         watch: hasFlag(allArgs, '--watch'),
-        persona: flag(allArgs, '--persona')
+        persona: flag(allArgs, '--persona'),
+        provider: flag(allArgs, '--provider'),
+        apiKey: flag(allArgs, '--api-key')
       }).then((code) => process.exit(code));
       break;
     }

@@ -203,6 +203,9 @@ const groq = new OpenAICompatibleProvider(
   'llama-3.1-8b-instant'
 );
 
+// DeepSeek — ships as a first-class named provider (DeepSeekProvider)
+const deepseek = new DeepSeekProvider(process.env.DEEPSEEK_API_KEY!, 'deepseek-chat');
+
 // LM Studio (local OpenAI-compatible server)
 const lmstudio = new OpenAICompatibleProvider(
   'http://localhost:1234/v1',
@@ -293,9 +296,14 @@ export FLOWFORGE_OPENAI_URL=https://api.openai.com/v1
 export FLOWFORGE_OPENAI_API_KEY=sk-...
 export FLOWFORGE_OPENAI_MODEL=gpt-4o-mini
 flowforge run fixtures/Grade7-Maths.workforce assignment
+
+# DeepSeek (named provider — endpoint and default model are built in)
+export FLOWFORGE_PROVIDER=deepseek
+export DEEPSEEK_API_KEY=sk-...
+flowforge run fixtures/Grade7-Maths.workforce assignment
 ```
 
-> **Note:** full CLI provider selection (the environment-variable lookup described above) is a planned enhancement — the current CLI always uses the mock provider. See the Phase 3 / Phase 4 roadmap in `docs/PLAN.md`. For now, instantiate providers directly in code or integration tests.
+> **Note:** the CLI selects providers via the `--provider ollama|deepseek|openai` flag and `--api-key` (or the `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` env vars). The `FLOWFORGE_*` environment-variable lookup shown above is a planned enhancement; see the Phase 3 / Phase 4 roadmap in `docs/PLAN.md`. For per-tier mappings or custom providers, instantiate providers directly in code or integration tests.
 
 ---
 

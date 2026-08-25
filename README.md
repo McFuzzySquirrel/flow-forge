@@ -22,7 +22,7 @@
 packages/
   core/                @flowforge/core      — domain types + the six JSON Schemas + validator
   workforce-packages/  @flowforge/packages  — .workforce package loader & cross-reference validation
-  agents/              @flowforge/agents    — agent runtime + model provider abstraction (mock / Ollama / OpenAI-compatible)
+  agents/              @flowforge/agents    — agent runtime + model provider abstraction (mock / Ollama / DeepSeek / OpenAI-compatible)
   memory/              @flowforge/memory    — per-agent memory service (swappable vector store)
   audit/               @flowforge/audit     — append-only, hash-chained audit log
   workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching)
@@ -78,7 +78,7 @@ pnpm --filter @flowforge/desktop dev
 The reasoning behind these and other foundational decisions is captured as Architecture Decision
 Records in [docs/adr/](docs/adr/README.md).
 
-A comprehensive guide to running tests and wiring up real LLM providers (Ollama, OpenAI-compatible,
+A comprehensive guide to running tests and wiring up real LLM providers (Ollama, DeepSeek, OpenAI-compatible,
 or custom) lives in [docs/testing.md](docs/testing.md).
 
 A history of all notable changes lives in [CHANGELOG.md](CHANGELOG.md).
