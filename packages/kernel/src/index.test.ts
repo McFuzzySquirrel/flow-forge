@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FlowForgeKernel, ENGINE_VERSION } from './index.js';
 import { packWorkforce, unpackWorkforce, generateSigningKeypair } from '@flowforge/packaging';
+import { loadWorkforcePackage } from '@flowforge/packages';
+import { AgentRuntime, MockModelProvider, ModelRegistry } from '@flowforge/agents';
+import { AuditLog } from '@flowforge/audit';
+import { MemoryService } from '@flowforge/memory';
+import { WorkflowEngine } from '@flowforge/workflow';
 const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce', import.meta.url));
 const testDataRoot = fileURLToPath(new URL('../../../.test-artifacts/kernel/', import.meta.url));
 
@@ -250,6 +255,31 @@ describe('FlowForgeKernel (package install & signing — Phase 4)', () => {
     const k1 = new FlowForgeKernel();
     expect(() => k1.loadPackage(pkgDir)).toThrow(/not compatible with engine/);
     expect(ENGINE_VERSION).toBeTruthy();
+  });
+
+  it('imports an externally-executed run and its audit records, preserving the chain', async () => {
+    // Drive a run with a standalone engine + AuditLog, as the CLI does.
+    const pkg = loadWorkforcePackage(fixture);
+    const models = new ModelRegistry();
+    const mock = new MockModelProvider(() => JSON.stringify({ note: 'mock' }));
+    models.set('small', mock).set('medium', mock).set('large', mock);
+    const audit = new AuditLog();
+    const engine = new WorkflowEngine(
+      new AgentRuntime(pkg, models, new MemoryService(), audit),
+      audit
+    );
+    const run = await engine.start(pkg.workflows.get('assignment')!);
+    const records = audit.all();
+
+    const k1 = new FlowForgeKernel({ dataDir });
+    const snapshot = k1.importRun(fixture, run, records);
+    expect(snapshot.status).toBe('waitingForHuman');
+    expect(k1.listRuns()).toHaveLength(1);
+    expect(k1.getAuditTrail().chainIntact).toBe(true);
+
+    const k2 = new FlowForgeKernel({ dataDir });
+    expect(k2.listRuns()).toHaveLength(1);
+    expect(k2.getAuditTrail().chainIntact).toBe(true);
   });
 });
 

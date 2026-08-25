@@ -25,6 +25,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - Agent permission keys and the audit `section` field are domain-neutral (Phase 4.2.2).
 - Workflow engine's role/binding authorization extracted into shared `authorizeHumanStep` / `applyHumanResponse` helpers reused by every runner.
+- **Documentation overhaul:** `docs/testing.md` rewritten from scratch (accurate commands, all 12 packages, test pyramid, runner conformance, env-guarded live tests); new end-user `docs/user-guide.md`; README reworked quickstart-first with a common-commands table and corrected status.
+- **`flowforge run` now actually persists runs** (and re-chains their audit records) via `KernelApi.importRun`, so `runs list` / `runs show` / `audit show` reflect headless CLI runs as advertised.
 
 ---
 

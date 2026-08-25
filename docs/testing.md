@@ -1,6 +1,9 @@
 # FlowForge Testing Guide
 
-This guide covers the current test suite, how to run tests, how to write new tests, and — most importantly — how to exercise the system against real LLM providers (Ollama, OpenAI, or any OpenAI-compatible endpoint) instead of the built-in mock.
+How FlowForge is tested, how to run the suite, and how to write tests — including
+how to exercise the system against real LLM providers and live infrastructure
+(Ollama, OpenAI-compatible endpoints, Chroma, a Dapr sidecar) instead of the
+built-in mocks.
 
 ---
 
@@ -8,59 +11,95 @@ This guide covers the current test suite, how to run tests, how to write new tes
 
 ```bash
 pnpm install
-pnpm build   # required before running tests
-pnpm test    # run the full suite
+pnpm build   # compile the workspace first — tests import the compiled packages
+pnpm test    # run the full suite (offline, mock models only)
 ```
 
-All tests use [Vitest](https://vitest.dev/) and run in a Node.js environment.  The root `vitest.config.ts` picks up every `*.test.ts` file under `packages/*/src/` and `packages/*/test/`.
+The full suite is **fast, deterministic and offline** — every model call goes
+through `MockModelProvider` unless you opt into a real provider. On a typical
+machine it completes in a few seconds.
+
+All tests run under [Vitest](https://vitest.dev/). The root `vitest.config.ts`
+discovers every `*.test.ts` under `packages/*/src/` and `packages/*/test/`, so a
+new test file needs no registration.
 
 ---
 
-## What is tested today
+## The test pyramid
 
-| Package | Test file | What it covers |
+FlowForge tests are layered the way the system is layered:
+
+1. **Unit** — schemas, the workflow engine, the audit hash chain, the memory
+   contract suite, identity mapping/sessions. Pure, fast, no I/O beyond a temp
+   directory.
+2. **Integration** — the pieces that make FlowForge *FlowForge*:
+   - the **runner conformance suite** drives both the embedded engine and the
+     Dapr runner through the same scripted human-in-the-loop scenario;
+   - `.workforce` **pack → verify → unpack round-trips** (determinism, signing,
+     tamper rejection);
+   - two packages running side-by-side in one kernel with **zero audit/memory
+     cross-contamination**;
+   - headless CLI runs via `--answers`.
+3. **Live / infrastructure** — optional tests that need a real model or service.
+   These are gated with `describe.skipIf(...)` on an environment variable, so
+   they silently skip in CI and for anyone who hasn't provisioned the service.
+
+Keep the default suite fast. Put anything that needs a network or a Docker
+container behind a skip-guard, never in the default path.
+
+---
+
+## Running tests
+
+```bash
+pnpm test                                     # the whole suite
+pnpm vitest run packages/agents/src/runtime.test.ts   # one file
+pnpm vitest run -t "chains records"          # by test name
+pnpm vitest run --reporter=verbose           # per-test output
+pnpm vitest                                   # watch mode while developing
+```
+
+Notes:
+
+- Tests are run from the repo root. There is **no `test` script on individual
+  packages** — use the root commands above.
+- Many tests load fixtures by resolving `../../../fixtures/...` from
+  `import.meta.url`, so they work regardless of your current directory.
+
+---
+
+## What's tested today
+
+| Package | Test file(s) | Covers |
 |---|---|---|
-| `@flowforge/core` | `src/validate.test.ts` | All seven JSON schemas — valid and invalid manifests, agent defs, skill frontmatter, workflow node discriminators, identity config |
-| `@flowforge/workforce-packages` | `src/index.test.ts` | Loading and cross-reference validation of the `Grade7-Maths.workforce` fixture; `parseSkillFile` happy path and error cases |
-| `@flowforge/agents` | `src/runtime.test.ts` | `AgentRuntime.step` — structured output parsing, persona overlay injection, skill instruction inclusion, memory recall as audit evidence, unknown-agent rejection, `writeMemory` |
-| `@flowforge/memory` | `src/index.test.ts` | `VectorStore` interface contract suite (run against both `InMemoryVectorStore` and `FileVectorStore`); namespace isolation; `MemoryService` recall/forget/list; retention/decay (`maxItems`, `maxAgeMs`); `MockEmbeddingProvider` vector quality |
-| `@flowforge/audit` | `src/index.test.ts` | Hash-chain construction and verification, tamper detection, schema-valid records |
-| `@flowforge/workflow` | `src/index.test.ts` | Full end-to-end assignment lifecycle (5 agent steps + 3 human pauses); rejection/resubmit loop; role enforcement; participant binding; retry/fail; persona override; `evaluateCondition`; `validateGraph` |
-| `@flowforge/identity` | `src/index.test.ts` | `RoleMapper`, `PermissionPolicy`, `IdentityRegistry`, `IdentityService` login/refresh/logout/audit, `InMemorySessionStore` TTL |
-| `@flowforge/kernel` | `src/index.test.ts` | `FlowForgeKernel` in-memory and file-backed persistence — validate, load, list, remove packages; start/resume runs; OIDC sign-in; role enforcement; audit trail; full assignment walkthrough across two kernel instances |
-| `@flowforge/desktop` | `src/kernel.test.ts` | IPC bridge smoke test |
-
-### Running individual packages
-
-```bash
-# one package
-pnpm --filter @flowforge/workflow test
-
-# watch mode for active development
-pnpm vitest
-```
-
-### Useful Vitest flags
-
-```bash
-# run only tests whose name matches a pattern
-pnpm vitest run --reporter=verbose -t "chains records"
-
-# run a single file
-pnpm vitest run packages/agents/src/runtime.test.ts
-```
+| `@flowforge/core` | `src/validate.test.ts` | All JSON schemas (workforce-package incl. `engineVersion`, agent, skill, persona, workflow, audit-record, identity) — valid and invalid documents, node discriminators |
+| `@flowforge/packages` (workforce-packages) | `src/index.test.ts` | Loading and cross-reference validation of the fixtures; `parseSkillFile` happy path and error cases |
+| `@flowforge/agents` | `src/runtime.test.ts`, `src/providers.test.ts` | `AgentRuntime.step` (structured output, persona overlay, skill instructions, memory recall as evidence), `writeMemory`, provider classes |
+| `@flowforge/memory` | `src/index.test.ts` | Shared `VectorStore` contract suite (in-memory + file), namespace isolation, `MemoryService` recall/forget/list, retention/decay (`maxItems`, `maxAgeMs`) |
+| `@flowforge/audit` | `src/index.test.ts` | Hash-chain construction, verification, tamper detection, schema-valid records |
+| `@flowforge/workflow` | `src/index.test.ts`, `src/conformance.test.ts` | End-to-end assignment lifecycle, rejection/resubmit loop, role enforcement + participant binding (ADR-0010), retries/fail, persona override, `evaluateCondition`, `validateGraph`, the embedded runner passing the conformance suite |
+| `@flowforge/identity` | `src/index.test.ts` | `RoleMapper`, `PermissionPolicy`, `IdentityRegistry`, `IdentityService` login/refresh/logout + audited denials, session TTL |
+| `@flowforge/kernel` | `src/index.test.ts`, `src/isolation.test.ts` | `FlowForgeKernel` in-memory + file-backed persistence, package install from signed/unsigned/tampered `.workforce` archives, `engineVersion` rejection, OIDC token sign-in, the full assignment walkthrough, and **two packages side-by-side with zero cross-contamination** |
+| `@flowforge/packaging` | `src/index.test.ts` | Deterministic ZIP writer/reader, canonical JSON, Ed25519 signing, pack/unpack round-trips, `verifyWorkforceArchive` (hashes, signature, engine compat), path-traversal guard |
+| `@flowforge/dapr-runner` | `src/index.test.ts` | The Dapr runner passing the **same conformance suite** as the embedded engine via an in-process Dapr executor; authorization on resume; `DaprStateStoreAdapter` round-trips |
+| `@flowforge/cli` | `src/config.test.ts`, `src/setup.test.ts`, `src/pack.test.ts` | Config precedence + secrets handling, interactive/non-interactive setup, `pack`/`unpack`/`verify` command behavior |
+| `@flowforge/desktop` | `src/kernel.test.ts` | IPC bridge smoke test over the kernel |
 
 ---
 
 ## Anatomy of a test
 
-Most tests follow a three-step pattern:
+Most tests follow assemble → act → assert:
 
-1. **Assemble** – load the `Grade7-Maths.workforce` fixture, create a `MockModelProvider` that returns a fixed JSON string, wire up `ModelRegistry`, `MemoryService`, `AuditLog`.
-2. **Act** – call the unit under test (e.g. `runtime.step(...)` or `engine.resume(...)`).
-3. **Assert** – check the returned value, the audit trail, and any side effects (memory, persisted state).
+1. **Assemble** — load a fixture package, create a `MockModelProvider` that
+   returns a fixed JSON string, wire a `ModelRegistry`, `MemoryService` and
+   `AuditLog`.
+2. **Act** — call the unit under test (`runtime.step`, `engine.resume`,
+   `kernel.startRun`, …).
+3. **Assert** — check the return value, the audit trail, and any side effects
+   (memory, persisted run state).
 
-The helper used throughout the agent and workflow tests:
+The helper used throughout the agent/workflow/kernel tests:
 
 ```ts
 import { loadWorkforcePackage } from '@flowforge/packages';
@@ -70,7 +109,9 @@ import { AgentRuntime, MockModelProvider, ModelRegistry } from '@flowforge/agent
 
 function makeRuntime(responder: (systemPrompt: string) => string) {
   const pkg = loadWorkforcePackage('/path/to/Grade7-Maths.workforce');
-  const provider = new MockModelProvider((req) => responder(req.messages[0]!.content));
+  const provider = new MockModelProvider((request) =>
+    responder(request.messages[0]!.content)
+  );
   const models = new ModelRegistry()
     .set('small', provider)
     .set('medium', provider)
@@ -79,291 +120,133 @@ function makeRuntime(responder: (systemPrompt: string) => string) {
 }
 ```
 
+`MockModelProvider` takes a single callback `(request: CompletionRequest) => string`
+and returns that string as the model completion — perfect for scripting agent
+responses that parse as structured JSON (`{ "score": 82, "confidence": 0.9 }`).
+
+---
+
+## The runner conformance suite
+
+FlowForge's workflows run on two runners: the embedded in-process engine and
+the Dapr Workflows runner. **One spec, two runners** is enforced by
+`runConformanceSuite` in `packages/workflow/src/conformance.ts`:
+
+- it drives any `WorkflowRunner` through the same scripted scenario (status
+  transitions, pending-task roles in order, state mutations, intact audit chain);
+- `packages/workflow/src/conformance.test.ts` runs it against the embedded
+  engine;
+- `packages/dapr-runner/src/index.test.ts` runs it against `DaprWorkflowRunner`
+  using an in-process Dapr executor (no sidecar required) — so the workflow→Dapr
+  translation is exercised in CI.
+
+Any future runner just calls the same suite.
+
 ---
 
 ## Testing with real LLM providers
 
-All model traffic goes through the `ModelProvider` interface:
+All model traffic goes through the two-method `ModelProvider` interface
+(`name` + `complete(request)`). Swap `MockModelProvider` for a real provider to
+run the same code against a real model. A good pattern is to keep the fast unit
+tests on the mock and add a separate `*.integration.test.ts` file for smoke
+tests.
 
-```ts
-export interface ModelProvider {
-  readonly name: string;
-  complete(request: CompletionRequest): Promise<CompletionResponse>;
-}
-```
-
-Swap `MockModelProvider` for any of the built-in providers — or write your own — to run the same tests (or the CLI) against a real model.
-
-### Provider A — Ollama (local, offline)
-
-[Ollama](https://ollama.com) runs open-source models on your machine over a local HTTP API.
-
-**Setup**
+### Ollama (local, offline)
 
 ```bash
-# install: https://ollama.com/download
 ollama pull llama3.2        # ~2 GB; the default model
-ollama pull qwen2.5:3b      # lighter alternative (~2 GB)
-ollama serve                # keeps the server running (usually starts automatically)
+ollama pull qwen2.5:3b      # lighter alternative
+ollama serve                # usually starts automatically
 ```
-
-**Usage in tests**
 
 ```ts
 import { OllamaProvider, ModelRegistry } from '@flowforge/agents';
 
-const provider = new OllamaProvider(
-  'http://localhost:11434', // default
-  'llama3.2'               // model tag — must match a pulled model
-);
-
 const models = new ModelRegistry()
-  .set('small',  provider)
-  .set('medium', provider)
-  .set('large',  provider);
+  .set('small', new OllamaProvider('http://localhost:11434', 'qwen2.5:3b'))
+  .set('medium', new OllamaProvider('http://localhost:11434', 'llama3.2'))
+  .set('large', new OllamaProvider('http://localhost:11434', 'llama3.2'));
 ```
-
-**What changes with a real model**
-
-- Responses are natural language, not deterministic JSON. The `AgentRuntime` calls `tryParseJson` on the raw response, so an agent that expects structured output (`{ score, confidence }`) may return the raw string instead of a parsed object if the model produces prose.
-- Tests that assert on exact output values need to be adapted — either use looser assertions (`expect.stringContaining`) or configure the model with a system prompt that enforces a strict output schema.
-- Latency goes from <1 ms (mock) to 2–60 s depending on hardware.
-
-**Suggested approach**: keep the fast unit tests with `MockModelProvider` and add a separate `*.integration.test.ts` file (excluded from the default test run) for real-provider smoke tests:
 
 ```ts
 // packages/agents/src/runtime.integration.test.ts
-import { describe, it } from 'vitest';
-import { OllamaProvider, ModelRegistry, AgentRuntime } from './index.js';
-import { loadWorkforcePackage } from '@flowforge/packages';
-import { AuditLog } from '@flowforge/audit';
-import { MemoryService } from '@flowforge/memory';
-import { fileURLToPath } from 'node:url';
-
-const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce', import.meta.url));
-
-describe.skipIf(!process.env.OLLAMA_BASE_URL)('AgentRuntime — Ollama smoke tests', () => {
-  it('calls the assessment agent and gets a non-empty response', async () => {
-    const provider = new OllamaProvider(process.env.OLLAMA_BASE_URL, 'llama3.2');
+describe.skipIf(!process.env.OLLAMA_BASE_URL)('AgentRuntime — Ollama smoke', () => {
+  it('gets a non-empty response', async () => {
+    const provider = new OllamaProvider(process.env.OLLAMA_BASE_URL!, 'llama3.2');
     const models = new ModelRegistry().set('small', provider).set('medium', provider).set('large', provider);
     const runtime = new AgentRuntime(
-      loadWorkforcePackage(fixture),
-      models,
-      new MemoryService(),
-      new AuditLog()
+      loadWorkforcePackage(fixture), models, new MemoryService(), new AuditLog()
     );
-
     const result = await runtime.step({
       agentId: 'assessment',
       action: 'Mark the submission',
       inputs: { submission: 'x + 3 = 10 so x = 7' }
     });
-
-    console.log('raw model output:', result.raw);
     expect(result.raw.length).toBeGreaterThan(0);
-  }, 60_000); // long timeout for model inference
+  }, 60_000); // model inference is slow
 });
 ```
 
 Run only the integration tests:
 
 ```bash
-OLLAMA_BASE_URL=http://localhost:11434 pnpm vitest run --reporter=verbose runtime.integration
+OLLAMA_BASE_URL=http://localhost:11434 pnpm vitest run "*.integration"
 ```
 
----
+### OpenAI-compatible endpoints (incl. DeepSeek)
 
-### Provider B — OpenAI (or any OpenAI-compatible API)
-
-`OpenAICompatibleProvider` works with OpenAI, Azure OpenAI, Groq, Together AI, Mistral, LM Studio, or any service that serves the `/v1/chat/completions` endpoint.
-
-**Usage**
+`OpenAICompatibleProvider` works with OpenAI, Azure OpenAI, Groq, Together AI,
+LM Studio — anything that serves `/v1/chat/completions`. DeepSeek ships as its
+own `DeepSeekProvider`.
 
 ```ts
-import { OpenAICompatibleProvider, ModelRegistry } from '@flowforge/agents';
-
-// OpenAI
-const openai = new OpenAICompatibleProvider(
-  'https://api.openai.com/v1',
-  process.env.OPENAI_API_KEY!,
-  'gpt-4o-mini'
-);
-
-// Azure OpenAI (endpoint URL includes the deployment path)
-const azure = new OpenAICompatibleProvider(
-  'https://<resource>.openai.azure.com/openai/deployments/<deployment>/v1',
-  process.env.AZURE_OPENAI_API_KEY!,
-  'gpt-4o'
-);
-
-// Groq
-const groq = new OpenAICompatibleProvider(
-  'https://api.groq.com/openai/v1',
-  process.env.GROQ_API_KEY!,
-  'llama-3.1-8b-instant'
-);
-
-// DeepSeek — ships as a first-class named provider (DeepSeekProvider)
-const deepseek = new DeepSeekProvider(process.env.DEEPSEEK_API_KEY!, 'deepseek-chat');
-
-// LM Studio (local OpenAI-compatible server)
-const lmstudio = new OpenAICompatibleProvider(
-  'http://localhost:1234/v1',
-  'lm-studio', // LM Studio ignores the key but the header is required
-  'local-model'
-);
-
 const models = new ModelRegistry()
-  .set('small',  openai)
-  .set('medium', openai)
-  .set('large',  openai);
+  .set('small', new OpenAICompatibleProvider('https://api.openai.com/v1', process.env.OPENAI_API_KEY!, 'gpt-4o-mini'))
+  .set('medium', new OpenAICompatibleProvider('https://api.openai.com/v1', process.env.OPENAI_API_KEY!, 'gpt-4o-mini'))
+  .set('large', new OpenAICompatibleProvider('https://api.openai.com/v1', process.env.OPENAI_API_KEY!, 'gpt-4o'));
+
+// Or mix: cheap local agents, frontier model for assessment
+const hybrid = new ModelRegistry()
+  .set('small', new OllamaProvider('http://localhost:11434', 'qwen2.5:3b'))
+  .set('large', new OpenAICompatibleProvider('https://api.openai.com/v1', process.env.OPENAI_API_KEY!, 'gpt-4o'));
 ```
 
-**Using different providers per tier**
+### A custom provider
 
-Workforce packages specify a model tier per agent (`small`, `medium`, or `large`).  You can map each tier to a different provider — for example, local Ollama for cheap agents and a cloud model for the assessment agent:
-
-```ts
-import { OllamaProvider, OpenAICompatibleProvider, ModelRegistry } from '@flowforge/agents';
-
-const models = new ModelRegistry()
-  .set('small',  new OllamaProvider('http://localhost:11434', 'qwen2.5:3b'))
-  .set('medium', new OllamaProvider('http://localhost:11434', 'llama3.2'))
-  .set('large',  new OpenAICompatibleProvider('https://api.openai.com/v1', process.env.OPENAI_API_KEY!, 'gpt-4o'));
-```
-
----
-
-### Provider C — Writing a custom provider
-
-Implement the two-method interface:
+Implement the two-method interface and pass it to a `ModelRegistry` like any
+other provider:
 
 ```ts
 import type { ModelProvider, CompletionRequest, CompletionResponse } from '@flowforge/agents';
 
-export class AnthropicProvider implements ModelProvider {
-  readonly name = 'anthropic';
-
-  constructor(
-    private readonly apiKey: string,
-    private readonly defaultModel = 'claude-3-haiku-20240307'
-  ) {}
-
+export class MyProvider implements ModelProvider {
+  readonly name = 'my-provider';
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    const model = request.model ?? this.defaultModel;
-
-    // Anthropic messages API differs slightly: system prompt is a top-level field
-    const system = request.messages.find((m) => m.role === 'system')?.content ?? '';
-    const messages = request.messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => ({ role: m.role, content: m.content }));
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({ model, system, messages, max_tokens: 1024 })
-    });
-
-    if (!response.ok) throw new Error(`Anthropic request failed: ${response.status}`);
-    const data = (await response.json()) as { content: { text: string }[] };
-    return { content: data.content[0]!.text, model };
+    // ... call your endpoint ...
+    return { content: '…', model: 'my-model' };
   }
 }
 ```
 
-Pass it to a `ModelRegistry` exactly like any other provider.
+### What changes with a real model
+
+- Responses are prose, not deterministic JSON. The runtime calls `tryParseJson`
+  on the raw response, so tests that assert exact structured output may need
+  looser assertions or a system prompt that enforces a strict output schema.
+- Latency goes from <1 ms (mock) to seconds.
 
 ---
 
-## Using real providers through the CLI
+## Live infrastructure tests
 
-The CLI's `--mock` flag uses `MockModelProvider`. To run against a real provider, omit `--mock` and set environment variables:
-
-```bash
-# Ollama (default, no key required)
-export FLOWFORGE_PROVIDER=ollama
-export FLOWFORGE_OLLAMA_URL=http://localhost:11434
-export FLOWFORGE_OLLAMA_MODEL=llama3.2
-flowforge run fixtures/Grade7-Maths.workforce assignment
-
-# OpenAI-compatible
-export FLOWFORGE_PROVIDER=openai
-export FLOWFORGE_OPENAI_URL=https://api.openai.com/v1
-export FLOWFORGE_OPENAI_API_KEY=sk-...
-export FLOWFORGE_OPENAI_MODEL=gpt-4o-mini
-flowforge run fixtures/Grade7-Maths.workforce assignment
-
-# DeepSeek (named provider — endpoint and default model are built in)
-export FLOWFORGE_PROVIDER=deepseek
-export DEEPSEEK_API_KEY=sk-...
-flowforge run fixtures/Grade7-Maths.workforce assignment
-```
-
-> **Note:** the CLI selects providers via the `--provider ollama|deepseek|openai|hybrid` flag and `--api-key` (or the `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` env vars). After running `flowforge setup`, the generated `flowforge.config.json` is read automatically — flags and env vars override it per run. For per-tier mappings or custom providers, instantiate providers directly in code or integration tests.
-
----
-
-## Testing the memory subsystem
-
-### VectorStore implementations
-
-`@flowforge/memory` ships three `VectorStore` implementations, all tested against the same shared contract suite in `packages/memory/src/index.test.ts`:
-
-| Store | When to use |
-|---|---|
-| `InMemoryVectorStore` | Unit tests and in-process workflows; no persistence |
-| `FileVectorStore` | CLI (`--data-dir`) and single-machine deployments; persists collections as JSON files |
-| `ChromaVectorStore` | Production / multi-agent deployments; requires a running Chroma server |
-
-The shared contract verifies: `add`/`list` isolation between collections, `query` relevance and limit, `remove` deletes from both `list` and `query`, empty collections return `[]`.
-
-### EmbeddingProvider
-
-Embedding is behind an interface so the same `ChromaVectorStore` works in tests (with `MockEmbeddingProvider`) and in production (with `OllamaEmbeddingProvider` or a custom provider):
-
-```ts
-import { MockEmbeddingProvider, OllamaEmbeddingProvider, ChromaVectorStore } from '@flowforge/memory';
-
-// Tests / offline — deterministic sparse binary vectors
-const store = new ChromaVectorStore(new MockEmbeddingProvider());
-
-// Production — real dense vectors via Ollama
-const store = new ChromaVectorStore(
-  new OllamaEmbeddingProvider('http://localhost:11434', 'nomic-embed-text')
-);
-```
-
-**Using `OllamaEmbeddingProvider` locally:**
-
-```bash
-ollama pull nomic-embed-text   # ~274 MB
-ollama serve
-```
-
-Then point `OllamaEmbeddingProvider` at `http://localhost:11434`.
-
-### Running against a live Chroma server
-
-```bash
-# Start Chroma with Docker
-docker run -p 8000:8000 chromadb/chroma
-
-# Point the store at it in your integration test or CLI run
-```
-
-Use `describe.skipIf(!process.env.CHROMA_URL)` to guard Chroma integration tests so they are skipped when no server is available:
+The same `describe.skipIf(envVar)` pattern gates tests that need Docker
+services:
 
 ```ts
 describe.skipIf(!process.env.CHROMA_URL)('ChromaVectorStore — integration', () => {
   it('adds and recalls items', async () => {
-    const store = new ChromaVectorStore(
-      new MockEmbeddingProvider(),
-      process.env.CHROMA_URL
-    );
+    const store = new ChromaVectorStore(new MockEmbeddingProvider(), process.env.CHROMA_URL);
     await store.add('test/ns', { id: '1', text: 'fractions lesson', createdAt: new Date().toISOString() });
     const results = await store.query('test/ns', 'fractions', 5);
     expect(results.length).toBeGreaterThan(0);
@@ -371,122 +254,60 @@ describe.skipIf(!process.env.CHROMA_URL)('ChromaVectorStore — integration', ()
 });
 ```
 
-### Namespace isolation
-
-`MemoryService` enforces strict namespace isolation: each agent's memory lives in `<packageId>/<agentId>`. The isolation tests in `index.test.ts` verify:
-
-- Items added to `pkg/agent-a` never appear in `pkg/agent-b` recall or list.
-- Clearing (forgetting all items from) one agent's namespace does not affect any other namespace.
-
-### Retention and decay
-
-`MemoryService.setPolicy(namespace, policy)` accepts a `NamespacePolicy`:
-
-```ts
-interface NamespacePolicy {
-  maxItems?: number;   // prune oldest items when this count is exceeded
-  maxAgeMs?: number;   // exclude items older than this many milliseconds
-}
-```
-
-Example — keep at most 50 items per agent, discard anything older than 30 days:
-
-```ts
-const memory = new MemoryService(new FileVectorStore(dataDir));
-memory.setPolicy(MemoryService.namespace('pkg', 'coach'), {
-  maxItems: 50,
-  maxAgeMs: 30 * 24 * 60 * 60 * 1000,
-});
-```
-
-Both limits can be combined. `maxItems` is enforced immediately after each `remember` call; `maxAgeMs` is applied at query/list time without removing records from disk (useful for soft-expiry without irreversible deletes).
-
-### Memory CLI commands
-
-```bash
-# List all items in a namespace (reads from file-backed store)
-flowforge memory list dev.flowforge.grade7-maths/coach --data-dir ~/.flowforge
-
-# Delete a specific item (right to forget)
-flowforge memory delete dev.flowforge.grade7-maths/coach <item-id> --data-dir ~/.flowforge
-```
-
-Without `--data-dir` the commands operate on a transient in-memory store (useful for smoke-testing the command routing).
+- **Chroma** — `docker run -p 8000:8000 chromadb/chroma`; gate on `CHROMA_URL`.
+- **Dapr** — start the hosted stack (`docker compose -f docker/docker-compose.yml up --build`) and point a runner at the sidecar. The default suite already exercises the Dapr orchestrator translation through the in-process executor, so a live sidecar is only needed for a true end-to-end smoke.
 
 ---
 
 ## Environment variables reference
 
-| Variable | Used by | Default | Purpose |
-|---|---|---|---|
-| `OLLAMA_BASE_URL` | integration tests | — | Skips Ollama tests when unset (`describe.skipIf`) |
-| `OPENAI_API_KEY` | integration tests | — | OpenAI API key |
-| `AZURE_OPENAI_API_KEY` | integration tests | — | Azure OpenAI API key |
-| `GROQ_API_KEY` | integration tests | — | Groq API key |
-| `CHROMA_URL` | integration tests | — | Chroma server URL; skips Chroma integration tests when unset |
-| `FLOWFORGE_PROVIDER` | CLI `resolveModelRegistry` | — | Default provider (`ollama`/`deepseek`/`openai`/`hybrid`) when no `--provider` flag or config entry is set |
-
-A `flowforge.config.json` (repo or `~/.flowforge/config.json`) read by the CLI supplies the same
-defaults; see `flowforge setup --help` (i.e. `flowforge setup` or `flowforge doctor`) and
-`packages/cli/src/config.ts`.
+| Variable | Used by | Effect |
+|---|---|---|
+| `OLLAMA_BASE_URL` | `*.integration` tests | Enables Ollama smoke tests when set |
+| `OPENAI_API_KEY` | `*.integration` tests | Key for OpenAI-compatible providers |
+| `CHROMA_URL` | `*.integration` tests | Enables Chroma integration tests when set |
+| `FLOWFORGE_PROVIDER` | CLI provider resolution | Default provider (`ollama`/`deepseek`/`openai`/`hybrid`) when no `--provider` flag or config is present |
+| `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` | CLI | Cloud API keys; also written by `flowforge setup` to the git-ignored `.env` |
 
 ---
 
-## Structuring integration tests
+## Coverage
 
-The recommended pattern keeps unit tests (fast, always run) and integration tests (slow, optional) in separate files, using Vitest's `describe.skipIf` guard:
-
-```ts
-// Skip the whole suite unless the env var is present
-describe.skipIf(!process.env.OPENAI_API_KEY)('Assessment — OpenAI integration', () => {
-  it('returns structured JSON for a one-step equation submission', async () => {
-    // ...
-  }, 30_000);
-});
-```
-
-To run only integration tests without changing `vitest.config.ts`:
+Vitest coverage uses `@vitest/coverage-v8` (install once, then run):
 
 ```bash
-OPENAI_API_KEY=sk-... pnpm vitest run --reporter=verbose "*.integration"
-```
-
-To include integration tests in CI, add the environment variable as a repository secret and include the flag in your workflow.
-
----
-
-## Checking test coverage
-
-Vitest has built-in coverage via `@vitest/coverage-v8`:
-
-```bash
-pnpm add -D @vitest/coverage-v8   # add once if not already present
+pnpm add -D @vitest/coverage-v8
 pnpm vitest run --coverage
 ```
 
-The coverage report is written to `coverage/` and a summary is printed to the terminal.
+The report is written to `coverage/` and summarized in the terminal.
 
 ---
 
 ## Test artifacts
 
-Some tests write temporary files (run state, kernel persistence tests). These land in `.test-artifacts/` at the repo root, which is git-ignored. The tests clean up after themselves via `afterEach` / `afterAll` hooks.
+Tests that write files (run state, kernel persistence, archive round-trips) use
+a temp directory under `.test-artifacts/` at the repo root (git-ignored) and
+clean up after themselves via `afterEach`.
 
 ---
 
 ## Adding tests for a new package
 
-1. Create `packages/<name>/src/<name>.test.ts` (or `packages/<name>/test/`).
-2. The root `vitest.config.ts` picks it up automatically — no registration needed.
-3. Follow the assemble / act / assert pattern, using `MockModelProvider` for any code that calls a model.
-4. For side-effecting tests (file I/O, real HTTP), add a `beforeEach` / `afterEach` cleanup block.
+1. Create `packages/<name>/src/<name>.test.ts` — root `vitest.config.ts` picks
+   it up automatically.
+2. Follow assemble → act → assert, using `MockModelProvider` for any code that
+   calls a model.
+3. For side-effecting tests (file I/O, real HTTP), add `beforeEach`/`afterEach`
+   cleanup and use `describe.skipIf` when a service is required.
+4. Run it with `pnpm vitest run packages/<name>` and then the full suite with
+   `pnpm test`.
 
 ---
 
 ## Further reading
 
 - [Vitest docs](https://vitest.dev/guide/)
-- [Ollama API reference](https://github.com/ollama/ollama/blob/main/docs/api.md)
-- [OpenAI API reference](https://platform.openai.com/docs/api-reference/chat)
-- [`packages/agents/src/providers.ts`](../packages/agents/src/providers.ts) — `MockModelProvider`, `OllamaProvider`, `OpenAICompatibleProvider`, `ModelRegistry`
-- [`docs/PLAN.md`](PLAN.md) — upcoming work including real-provider CLI integration
+- [User guide](user-guide.md) — running the platform day-to-day
+- [Package author guide](authoring-packages.md) — authoring `.workforce` packages
+- [Dapr runner](dapr-runner.md) — the second workflow runner

@@ -200,6 +200,13 @@ export interface KernelApi {
   /** Get a single run by id. */
   getRun(runId: string): Promise<RunSnapshot | undefined>;
 
+  /**
+   * Import an externally-executed run (e.g. one driven by the CLI's own
+   * engine) plus its audit records into this kernel's persistence, so
+   * `runs list`/`audit show` reflect headless CLI runs too.
+   */
+  importRun(packageDir: string, run: import('@flowforge/workflow').WorkflowRun, auditRecords: AuditRecord[]): RunSnapshot;
+
   // ---- Audit --------------------------------------------------------------
 
   /** Return audit records, optionally filtered. */

@@ -45,8 +45,7 @@ import {
   InMemoryStateStore,
   WorkflowEngine,
   validateGraph,
-  type StateStore,
-  type WorkflowRun
+  type StateStore
 } from '@flowforge/workflow';
 import type {
   AuditFilter,
@@ -61,6 +60,8 @@ import type {
   TokenSetLike,
   UserSnapshot
 } from './api.js';
+import type { AuditRecord } from '@flowforge/core';
+import type { WorkflowRun } from '@flowforge/workflow';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -138,6 +139,17 @@ function toUserSnapshot(principal: Principal): UserSnapshot {
     provider: principal.provider,
     roles: principal.roles
   };
+}
+
+const CHAIN_FIELDS = new Set(['id', 'timestamp', 'hash', 'previousHash']);
+
+/** Drop the hash-chain-generated fields from a record before re-recording it. */
+function stripChainFields(record: AuditRecord): Omit<AuditRecord, 'id' | 'timestamp' | 'hash' | 'previousHash'> {
+  const clean: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(record)) {
+    if (!CHAIN_FIELDS.has(key)) clean[key] = value;
+  }
+  return clean as Omit<AuditRecord, 'id' | 'timestamp' | 'hash' | 'previousHash'>;
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +341,28 @@ export class FlowForgeKernel implements KernelApi {
     if (!ref) return undefined;
     const run = this.stateStore.load(runId);
     return run ? toRunSnapshot(run, ref.packageId) : undefined;
+  }
+
+  /**
+   * Import a run that was executed outside this kernel (the CLI drives its own
+   * engine) plus its audit records, so persisted runs and the audit trail
+   * reflect headless CLI runs too. Records are re-chained into this kernel's
+   * audit log so integrity is preserved across sources.
+   */
+  importRun(packageDir: string, run: WorkflowRun, auditRecords: AuditRecord[]): RunSnapshot {    if (!this.dataDir) {
+      throw new Error('importRun requires a dataDir (pass { dataDir } to FlowForgeKernel)');
+    }
+    const pkg = this.loadPackageInternal(packageDir);
+    this.stateStore.save(run);
+    this.runIndex.set(run.id, { packageId: pkg.id, workflowId: run.workflowId });
+    for (const record of auditRecords) {
+      // Strip the chain-generated fields so re-recording chains cleanly; the
+      // kernel's AuditLog regenerates id/timestamp/hashes for this log.
+      this.audit.record(stripChainFields(record));
+    }
+    this.saveRunIndex();
+    this.savePackageRegistry();
+    return toRunSnapshot(run, pkg.id);
   }
 
   // ---- Audit --------------------------------------------------------------

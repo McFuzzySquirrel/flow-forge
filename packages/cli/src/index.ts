@@ -387,9 +387,10 @@ export async function runCommand(
 
   // Persist run to dataDir when requested.
   if (options.dataDir || config.vectorStore.type === 'file') {
-    const kernel = new FlowForgeKernel({ dataDir: resolveDataDir(options.dataDir, config) });
-    kernel.loadPackage(packageDir);
-    console.log(`\n✔ Run persisted to ${resolveDataDir(options.dataDir, config)}`);
+    const dataDir = resolveDataDir(options.dataDir, config);
+    const kernel = new FlowForgeKernel({ dataDir });
+    kernel.importRun(packageDir, run, audit.all());
+    console.log(`\n✔ Run persisted to ${dataDir}`);
   }  return run.status === 'completed' ? 0 : 1;
 }
 
