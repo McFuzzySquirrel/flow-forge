@@ -107,13 +107,12 @@ export function HomeView({
     setError(undefined);
     setValidation(undefined);
     try {
-      if (trimmed.endsWith('.workforce')) {
-        await window.flowforge.installWorkflowArchive(trimmed);
-      } else {
-        const result = await window.flowforge.validatePackage(trimmed);
-        setValidation(result);
-        if (!result.valid) return;
-        await window.flowforge.loadPackage(trimmed);
+      // The main process classifies the path: package directory vs .workforce
+      // archive (a directory can legitimately end in `.workforce`).
+      const result = await window.flowforge.installPackage(trimmed);
+      if (!result.ok) {
+        setValidation(result.validation);
+        return;
       }
       setPath('');
       await onPackagesChanged();
