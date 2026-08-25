@@ -1,0 +1,27 @@
+{
+  "specVersion": "1.0",
+  "id": "com.example.corporate-onboarding",
+  "name": "Corporate Onboarding",
+  "version": "1.0.0",
+  "description": "Second-domain reference package: a corporate onboarding workforce with HR-Planner, Buddy, Compliance and Manager-Review agents. Proves the package format is domain-agnostic.",
+  "domain": "onboarding",
+  "engineVersion": ">=0.1.0",
+  "authors": ["FlowForge"],
+  "license": "MIT",
+  "agents": [
+    "agents/hr-planner/agent.json",
+    "agents/buddy/agent.json",
+    "agents/compliance/agent.json",
+    "agents/manager-review/agent.json"
+  ],
+  "skills": [
+    "skills/onboarding/SKILL.md"
+  ],
+  "personas": ["personas/supportive-buddy.json"],
+  "workflows": ["workflows/onboarding.json"],
+  "knowledge": [
+    { "path": "knowledge/onboarding-handbook.md", "agents": ["buddy", "compliance"] }
+  ],
+  "permissions": { "network": false, "fileSystem": false },
+  "branding": { "displayName": "Corporate Onboarding", "primaryColor": "#0f766e" }
+}

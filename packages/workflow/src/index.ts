@@ -186,6 +186,134 @@ export interface WorkflowStartOptions {
 }
 
 /**
+ * A human response to a pending human-input / human-approval node. Mirrors the
+ * embedded engine's resume payload so every runner shares the same contract.
+ */
+export interface HumanStepResponse {
+  principal: Principal;
+  value?: unknown;
+  approved?: boolean;
+  reason?: string;
+}
+
+/**
+ * Transport-agnostic workflow runner contract (Phase 4.3). Both the embedded
+ * in-process engine and the Dapr Workflows runner implement this interface, so
+ * a conformance suite can prove one spec, two runners, same results. A runner
+ * is bound to a single workflow definition.
+ */
+export interface WorkflowRunner {
+  /** Start a new run of the runner's bound workflow. */
+  start(options?: WorkflowStartOptions): Promise<WorkflowRun>;
+  /**
+   * Deliver a human response to a paused run (the "deliver-human-task"
+   * operation). Authorization (role + per-run participant binding, ADR-0010)
+   * is enforced by the runner before the response is applied.
+   */
+  resume(runId: string, response: HumanStepResponse): Promise<WorkflowRun>;
+  /** Query the current state of a run. */
+  query(runId: string): Promise<WorkflowRun | undefined>;
+}
+
+/**
+ * Adapts the embedded {@link WorkflowEngine} to the {@link WorkflowRunner}
+ * interface for a single workflow. The engine is the reference implementation;
+ * the conformance suite drives it and the Dapr runner identically.
+ */
+export class EmbeddedWorkflowRunner implements WorkflowRunner {
+  constructor(
+    private readonly engine: WorkflowEngine,
+    private readonly workflow: WorkflowDefinition
+  ) {}
+
+  start(options: WorkflowStartOptions = {}): Promise<WorkflowRun> {
+    return this.engine.start(this.workflow, options);
+  }
+
+  resume(runId: string, response: HumanStepResponse): Promise<WorkflowRun> {
+    return this.engine.resume(this.workflow, runId, response);
+  }
+
+  query(runId: string): Promise<WorkflowRun | undefined> {
+    return Promise.resolve(this.engine.getRun(runId));
+  }
+}
+
+/**
+ * Shared role + per-run participant-binding check (ADR-0010). Denials are
+ * audited and raise {@link AuthorizationError}; the run is left untouched.
+ * Used by every runner so authorization is enforced identically everywhere.
+ */
+export function authorizeHumanStep(
+  run: WorkflowRun,
+  role: string,
+  principal: Principal,
+  audit: AuditLog,
+  nodeId?: string
+): void {
+  const reason = unauthorizedReason(run, role, principal);
+  if (reason) {
+    audit.record({
+      actor: principalActor(principal),
+      action: 'workflow.authorization.denied',
+      workflowRunId: run.id,
+      nodeId: nodeId ?? run.currentNodeId,
+      detail: { requiredRole: role, reason }
+    });
+    throw new AuthorizationError(`Not authorized to act on run '${run.id}': ${reason}`);
+  }
+}
+
+/** Pure role/binding check: returns a human-readable reason when unauthorized. */
+export function unauthorizedReason(
+  run: WorkflowRun,
+  role: string,
+  principal: Principal
+): string | undefined {
+  if (!principal.roles.includes(role)) {
+    return `principal does not hold role '${role}'`;
+  }
+  const boundTo = run.participants?.[role];
+  if (boundTo && boundTo !== principal.id) {
+    return `role '${role}' is bound to another participant for this run`;
+  }
+  return undefined;
+}
+
+/**
+ * Apply a validated human response to a run snapshot, returning the updated run
+ * and the audit event to record. Shared by every runner so human steps mutate
+ * state identically regardless of the execution substrate.
+ */
+export function applyHumanResponse(
+  run: WorkflowRun,
+  node: HumanInputNode | HumanApprovalNode,
+  response: HumanStepResponse
+): { run: WorkflowRun; audit: { action: string; detail: Record<string, unknown> } } {
+  const updated = structuredClone(run);
+  updated.participants = { ...(updated.participants ?? {}), [node.role]: response.principal.id };
+  let action: string;
+  let detail: Record<string, unknown>;
+  if (node.type === 'humanInput') {
+    updated.state = { ...(updated.state ?? {}), [node.output]: response.value };
+    action = 'human.input';
+    detail = { output: node.output };
+    updated.currentNodeId = node.next;
+  } else {
+    const approved = response.approved === true;
+    action = approved ? 'human.approval' : 'human.rejection';
+    detail = { reason: response.reason ?? '', subject: node.subject ?? '' };
+    updated.currentNodeId = approved ? (node.onApprove ?? node.next) : node.onReject;
+    if (!updated.currentNodeId) {
+      throw new Error(`Approval node '${node.id}' has no target for decision`);
+    }
+  }
+  updated.pending = undefined;
+  updated.status = 'running';
+  return { run: updated, audit: { action, detail } };
+}
+
+/**
  * Embedded in-process workflow runner. Interprets the declarative workflow
  * spec: agent steps (with retries), human-input and human-approval steps
  * (pause/resume), branching and end nodes. The workflow definition is
@@ -225,8 +353,8 @@ export class WorkflowEngine {
    * Resume a paused run with human input or an approval decision. The caller
    * must supply an authenticated Principal (ADR-0010); the engine verifies the
    * principal holds the pending node's role and, once someone has acted in a
-   * role, binds that role to them for the rest of the run (only the student
-   * who submitted may resubmit; only the assigned teacher may approve).
+   * role, binds that role to them for the rest of the run (only the participant
+   * who first acted in a role may act again for that role in this run).
    * Failed checks emit an audited 'workflow.authorization.denied' event and
    * throw AuthorizationError without altering the run.
    */
@@ -247,60 +375,17 @@ export class WorkflowEngine {
     if (node.type !== 'humanInput' && node.type !== 'humanApproval') {
       throw new Error(`Node '${node.id}' is not a human step`);
     }
-    this.authorize(run, node.role, principal);
-    run.participants = { ...run.participants, [node.role]: principal.id };
+    authorizeHumanStep(run, node.role, principal, this.audit);
 
-    if (node.type === 'humanInput') {
-      run.state[node.output] = humanResponse.value;
-      this.audit.record({
-        actor,
-        action: 'human.input',
-        workflowRunId: run.id,
-        nodeId: node.id,
-        detail: { output: node.output }
-      });
-      run.currentNodeId = node.next;
-    } else {
-      const approved = humanResponse.approved === true;
-      this.audit.record({
-        actor,
-        action: approved ? 'human.approval' : 'human.rejection',
-        workflowRunId: run.id,
-        nodeId: node.id,
-        detail: { reason: humanResponse.reason ?? '', subject: node.subject ?? '' }
-      });
-      run.currentNodeId = approved ? (node.onApprove ?? node.next) : node.onReject;
-      if (!run.currentNodeId) {
-        throw new Error(`Approval node '${node.id}' has no target for decision`);
-      }
-    }
-
-    run.pending = undefined;
-    run.status = 'running';
-    return this.advance(workflow, run);
-  }
-
-  /** Role check plus per-run participant binding; denials are audited. */
-  private authorize(run: WorkflowRun, role: string, principal: Principal): void {
-    let reason: string | undefined;
-    if (!principal.roles.includes(role)) {
-      reason = `principal does not hold role '${role}'`;
-    } else {
-      const boundTo = run.participants?.[role];
-      if (boundTo && boundTo !== principal.id) {
-        reason = `role '${role}' is bound to another participant for this run`;
-      }
-    }
-    if (reason) {
-      this.audit.record({
-        actor: principalActor(principal),
-        action: 'workflow.authorization.denied',
-        workflowRunId: run.id,
-        nodeId: run.currentNodeId,
-        detail: { requiredRole: role, reason }
-      });
-      throw new AuthorizationError(`Not authorized to act on run '${run.id}': ${reason}`);
-    }
+    const outcome = applyHumanResponse(run, node, humanResponse);
+    this.audit.record({
+      actor,
+      action: outcome.audit.action,
+      workflowRunId: run.id,
+      nodeId: node.id,
+      detail: outcome.audit.detail
+    });
+    return this.advance(workflow, outcome.run);
   }
 
   getRun(runId: string): WorkflowRun | undefined {
@@ -420,3 +505,6 @@ export class WorkflowEngine {
       : new Error(`Agent node '${node.id}' failed after ${maxAttempts} attempts`);
   }
 }
+
+export { runConformanceSuite, devPrincipal } from './conformance.js';
+export type { ConformanceResult, ConformanceStep } from './conformance.js';

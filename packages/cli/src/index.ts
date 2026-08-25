@@ -36,7 +36,16 @@ import {
 } from '@flowforge/agents';
 import { IdentityService, MockIdentityProvider } from '@flowforge/identity';
 import { WorkflowEngine } from '@flowforge/workflow';
-import { FlowForgeKernel } from '@flowforge/kernel';
+import { FlowForgeKernel, ENGINE_VERSION } from '@flowforge/kernel';
+import {
+  defaultArchivePath,
+  generateSigningKeypair,
+  packWorkforce,
+  publicKeyFingerprint,
+  publicKeyFromPrivate,
+  unpackWorkforce,
+  verifyWorkforceArchive
+} from '@flowforge/packaging';
 import { prompt } from './io.js';
 import { loadConfig, type FlowForgeConfig } from './config.js';
 import { doctorChecks, printChecks, runSetup } from './setup.js';
@@ -572,6 +581,83 @@ export async function memoryDeleteCommand(
 }
 
 // ---------------------------------------------------------------------------
+// pack / unpack / verify (Phase 4.1 — ecosystem)
+// ---------------------------------------------------------------------------
+
+export function packCommand(
+  packageDir: string,
+  options: { outputPath?: string; signingKeyPath?: string; publisher?: string } = {}
+): number {
+  try {
+    let signingKey: ReturnType<typeof generateSigningKeypair> | undefined;
+    if (options.signingKeyPath) {
+      const privateKey = readFileSync(options.signingKeyPath, 'utf8');
+      signingKey = { privateKey, publicKey: publicKeyFromPrivate(privateKey) };
+    }
+    const outputPath = options.outputPath ?? defaultArchivePath(packageDir);
+    const result = packWorkforce(packageDir, outputPath, {
+      signingKey,
+      publisher: options.publisher
+    });
+    console.log(`✔ Packed ${result.packageId} v${result.packageVersion} (${result.fileCount} files)`);
+    console.log(`  → ${result.archivePath}`);
+    console.log(result.signed ? `  signed by ${result.signerFingerprint}` : '  unsigned (use --signing-key to sign)');
+    return 0;
+  } catch (error) {
+    console.error(`✘ ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+export function unpackCommand(archivePath: string, options: { outputDir?: string } = {}): number {
+  try {
+    const outputDir = options.outputDir ?? archivePath.replace(/\.workforce$/, '');
+    const files = unpackWorkforce(archivePath, outputDir);
+    console.log(`✔ Unpacked ${archivePath} (${files.length} files) → ${outputDir}`);
+    return 0;
+  } catch (error) {
+    console.error(`✘ ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+export function verifyCommand(archivePath: string): number {
+  const result = verifyWorkforceArchive(archivePath, { engineVersion: ENGINE_VERSION });
+  if (result.valid) {
+    console.log(`✔ ${archivePath} is valid`);
+    console.log(`  package: ${result.packageId} v${result.packageVersion}`);
+    console.log(`  hash manifest: intact (${result.hashesIntact ? 'yes' : 'no'})`);
+    if (result.signed) {
+      console.log(`  signature: VALID — signed by ${result.signerFingerprint}`);
+    } else {
+      console.warn('  signature: unsigned — authenticity not proven');
+    }
+    if (result.engineCompatible === false) {
+      console.warn(`  engine compatibility: ${result.engineReason}`);
+    } else {
+      console.log(`  engine compatibility: OK (engine ${ENGINE_VERSION})`);
+    }
+    return 0;
+  }
+  console.error(`✘ ${archivePath} is NOT valid:`);
+  for (const detail of result.errors) console.error(`  - ${detail}`);
+  return 1;
+}
+
+export function generateKeyCommand(outputPath: string): number {
+  try {
+    const keypair = generateSigningKeypair();
+    writeFileSync(`${outputPath}`, keypair.privateKey, 'utf8');
+    console.log(`✔ Generated Ed25519 signing key → ${outputPath}`);
+    console.log(`  public key fingerprint: ${publicKeyFingerprint(publicKeyFromPrivate(keypair.privateKey))}`);
+    return 0;
+  } catch (error) {
+    console.error(`✘ ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // usage
 // ---------------------------------------------------------------------------
 
@@ -641,6 +727,21 @@ Usage:
 
   flowforge memory delete <namespace> <item-id> [--data-dir <dir>] [--config <path>]
       Delete a memory item from a namespace.
+
+  flowforge pack <package-dir> [options]
+      Pack a .workforce directory into a deterministic, optionally signed archive.
+      --output <file>          Output archive path (default: <package-id>-<version>.workforce).
+      --signing-key <key.pem>  Sign with this Ed25519 private key (PEM).
+      --publisher <name>       Publisher name recorded in the signature block.
+
+  flowforge unpack <archive> [--output <dir>]
+      Unpack a .workforce archive back into a directory.
+
+  flowforge verify <archive>
+      Verify an archive: hash integrity, Ed25519 signature and engine compatibility.
+
+  flowforge keygen <output.pem>
+      Generate a new Ed25519 signing keypair (private key written to the given path).
 `);
 }
 
@@ -698,7 +799,7 @@ function positionals(args: string[], ...flagNames: string[]): string[] {
   return result;
 }
 
-const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona', '--provider', '--api-key', '--config', '--ollama-url', '--ollama-model', '--embedding-model', '--cloud-url', '--cloud-model', '--vector-store', '--chroma-url', '--identity-mode', '--oidc-config'];
+const VALUE_FLAGS = ['--answers', '--identity', '--data-dir', '--package', '--run', '--actor', '--action', '--output', '--persona', '--provider', '--api-key', '--config', '--ollama-url', '--ollama-model', '--embedding-model', '--cloud-url', '--cloud-model', '--vector-store', '--chroma-url', '--identity-mode', '--oidc-config', '--signing-key', '--publisher'];
 
 const [, , command, subOrArg, ...rest] = process.argv;
 const allArgs = subOrArg !== undefined ? [subOrArg, ...rest] : [];
@@ -807,6 +908,34 @@ if (isDirectRun) {
       }
       break;
     }
+
+    case 'pack': {
+      const pos = positionals(allArgs, ...VALUE_FLAGS);
+      process.exit(
+        pos[0]
+          ? packCommand(pos[0], {
+              outputPath: flag(allArgs, '--output'),
+              signingKeyPath: flag(allArgs, '--signing-key'),
+              publisher: flag(allArgs, '--publisher')
+            })
+          : (usage(), 1)
+      );
+      break;
+    }
+
+    case 'unpack':
+      process.exit(
+        subOrArg ? unpackCommand(subOrArg, { outputDir: flag(allArgs, '--output') }) : (usage(), 1)
+      );
+      break;
+
+    case 'verify':
+      process.exit(subOrArg ? verifyCommand(subOrArg) : (usage(), 1));
+      break;
+
+    case 'keygen':
+      process.exit(subOrArg ? generateKeyCommand(subOrArg) : (usage(), 1));
+      break;
 
     case 'setup':
       runSetup({

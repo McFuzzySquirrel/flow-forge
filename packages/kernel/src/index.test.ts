@@ -1,9 +1,9 @@
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FlowForgeKernel } from './index.js';
-
+import { FlowForgeKernel, ENGINE_VERSION } from './index.js';
+import { packWorkforce, unpackWorkforce, generateSigningKeypair } from '@flowforge/packaging';
 const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce', import.meta.url));
 const testDataRoot = fileURLToPath(new URL('../../../.test-artifacts/kernel/', import.meta.url));
 
@@ -137,6 +137,119 @@ describe('FlowForgeKernel (in-memory)', () => {
     expect(records.find((record) => record.action === 'agent.step')?.actor.persona).toBe(
       'supportive-mentor'
     );
+  });
+
+  it('exposes workflow definitions and identity providers for the UI (Phase 5)', async () => {
+    const kernel = new FlowForgeKernel();
+    const pkg = kernel.loadPackage(fixture);
+
+    const workflow = kernel.getWorkflow(pkg.id, 'assignment');
+    expect(workflow.nodes.some((n) => n.type === 'humanApproval')).toBe(true);
+    expect(() => kernel.getWorkflow(pkg.id, 'nope')).toThrow(/Unknown workflow/);
+
+    const providers = kernel.listIdentityProviders();
+    expect(providers.some((p) => p.id === 'dev' && p.type === 'mock')).toBe(true);
+  });
+
+  it('signs in with OIDC-issued tokens through signInWithTokens (ADR-0010 / I.6)', async () => {
+    const kernel = new FlowForgeKernel({
+      identity: {
+        providers: [{ id: 'entra', type: 'oidc', issuer: 'https://login.example.com/tenant', clientId: 'abc' }],
+        roleMappings: [{ claim: 'groups', value: 'Staff', role: 'teacher' }]
+      }
+    });
+    kernel.loadPackage(fixture);
+
+    // Sign in with a mock token set the way the Electron main does after an
+    // authorization-code + PKCE exchange. The mock provider is always
+    // registered, so tokens are dev-style: accessToken maps to claims.
+    const user = await kernel.signInWithTokens('dev', { accessToken: 'dev-teacher' });
+    expect(user.roles).toContain('teacher');
+    expect(kernel.getCurrentUser()?.id).toBe('dev-teacher');
+  });
+});
+
+describe('FlowForgeKernel (package install & signing — Phase 4)', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = join(testDataRoot, `install-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    mkdirSync(dataDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('installs a signed archive and restores it across instances', () => {
+    const archive = join(dataDir, 'pkg.workforce');
+    packWorkforce(fixture, archive, { signingKey: generateSigningKeypair(), publisher: 'FlowForge' });
+
+    const k1 = new FlowForgeKernel({ dataDir });
+    const summary = k1.installWorkforceArchive(archive);
+    expect(summary.signing?.signed).toBe(true);
+    expect(summary.signing?.signerFingerprint).toBeTruthy();
+    expect(k1.listPackages()).toHaveLength(1);
+
+    const k2 = new FlowForgeKernel({ dataDir });
+    const restored = k2.listPackages()[0]!;
+    expect(restored.id).toBe(summary.id);
+    expect(restored.signing?.signed).toBe(true);
+    expect(restored.signing?.signerFingerprint).toBe(summary.signing?.signerFingerprint);
+  });
+
+  it('installs an unsigned archive but flags it unsigned', () => {
+    const archive = join(dataDir, 'pkg.workforce');
+    packWorkforce(fixture, archive);
+    const k1 = new FlowForgeKernel({ dataDir });
+    const summary = k1.installWorkforceArchive(archive);
+    expect(summary.signing?.signed).toBe(false);
+  });
+
+  it('refuses a tampered archive at install time', () => {
+    const archive = join(dataDir, 'pkg.workforce');
+    const tampered = join(dataDir, 'tampered.workforce');
+    packWorkforce(fixture, tampered, { signingKey: generateSigningKeypair() });
+
+    // Tamper with the unpacked content and re-pack with the same key: hash manifest now disagrees.
+    const unpackDir = join(dataDir, 'unpack');
+    unpackWorkforce(tampered, unpackDir);
+    writeFileSync(join(unpackDir, 'agents/planner/prompt.md'), '// tampered\n');
+    packWorkforce(unpackDir, archive, { signingKey: generateSigningKeypair() });
+
+    const k1 = new FlowForgeKernel({ dataDir });
+    expect(() => k1.installWorkforceArchive(archive)).toThrow(/hash|integrity/i);
+  });
+
+  it('refuses a package whose engineVersion is not satisfied (Phase 4.1.5)', () => {
+    // Craft a package directory that demands a newer engine.
+    const pkgDir = join(dataDir, 'future-pkg');
+    mkdirSync(join(pkgDir, 'agents', 'a'), { recursive: true });
+    mkdirSync(join(pkgDir, 'workflows'), { recursive: true });
+    writeFileSync(
+      join(pkgDir, 'workforce.json'),
+      JSON.stringify({
+        specVersion: '1.0',
+        id: 'dev.flowforge.future',
+        name: 'Future',
+        version: '9.0.0',
+        engineVersion: '>=2.0.0',
+        agents: ['agents/a/agent.json'],
+        workflows: ['workflows/w.json']
+      })
+    );
+    writeFileSync(
+      join(pkgDir, 'agents/a/agent.json'),
+      JSON.stringify({ id: 'a', name: 'A', role: 'r', model: { tier: 'small' } })
+    );
+    writeFileSync(
+      join(pkgDir, 'workflows/w.json'),
+      JSON.stringify({ id: 'w', name: 'W', start: 'e', nodes: [{ id: 'e', type: 'end' }] })
+    );
+
+    const k1 = new FlowForgeKernel();
+    expect(() => k1.loadPackage(pkgDir)).toThrow(/not compatible with engine/);
+    expect(ENGINE_VERSION).toBeTruthy();
   });
 });
 

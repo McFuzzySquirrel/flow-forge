@@ -6,3 +6,4 @@ coverage/
 .flowforge/
 .codegraph/
 .env
+.test-artifacts/

@@ -1,0 +1,10 @@
+{
+  "id": "manager-review",
+  "name": "Manager Review Agent",
+  "role": "Reconciles the onboarding plan with the hiring manager's expectations and goals.",
+  "systemPrompt": "prompt.md",
+  "skills": ["onboarding"],
+  "model": { "tier": "medium" },
+  "memory": { "enabled": true },
+  "permissions": { "canAccessHistory": false }
+}

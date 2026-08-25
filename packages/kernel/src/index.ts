@@ -19,8 +19,18 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { IdentityConfig, LoadedWorkforcePackage, Principal, WorkflowDefinition } from '@flowforge/core';
+import type {
+  IdentityConfig,
+  LoadedWorkforcePackage,
+  Principal,
+  WorkflowDefinition
+} from '@flowforge/core';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
+import {
+  checkEngineCompatibility,
+  unpackWorkforce,
+  verifyWorkforceArchive
+} from '@flowforge/packaging';
 import { AuditLog, FileAuditSink } from '@flowforge/audit';
 import { MemoryService } from '@flowforge/memory';
 import {
@@ -41,11 +51,14 @@ import {
 import type {
   AuditFilter,
   AuditTrailSnapshot,
+  GovernanceSummary,
   HumanResponse,
+  IdentityProviderSummary,
   KernelApi,
   PackageSummary,
   PackageValidationResult,
   RunSnapshot,
+  TokenSetLike,
   UserSnapshot
 } from './api.js';
 
@@ -56,12 +69,17 @@ import type {
 interface LoadedPackageEntry {
   pkg: LoadedWorkforcePackage;
   engine: WorkflowEngine;
+  /** Provenance recorded when the package was installed (Phase 4). */
+  signing?: { signed: boolean; signerFingerprint?: string; publisher?: string };
 }
 
 interface RunIndexEntry {
   packageId: string;
   workflowId: string;
 }
+
+/** The engine version published by this kernel, matched against `manifest.engineVersion`. */
+export const ENGINE_VERSION = '0.1.0';
 
 function humanRoles(workflow: WorkflowDefinition): string[] {
   return [
@@ -73,7 +91,7 @@ function humanRoles(workflow: WorkflowDefinition): string[] {
   ];
 }
 
-function toPackageSummary(pkg: LoadedWorkforcePackage): PackageSummary {
+function toPackageSummary(pkg: LoadedWorkforcePackage, signing?: LoadedPackageEntry['signing']): PackageSummary {
   return {
     id: pkg.manifest.id,
     name: pkg.manifest.name,
@@ -93,7 +111,9 @@ function toPackageSummary(pkg: LoadedWorkforcePackage): PackageSummary {
       description: workflow.description,
       nodeCount: workflow.nodes.length,
       roles: humanRoles(workflow)
-    }))
+    })),
+    ...(pkg.manifest.branding ? { branding: pkg.manifest.branding } : {}),
+    ...(signing ? { signing } : {})
   };
 }
 
@@ -129,6 +149,9 @@ export interface FlowForgeKernelOptions {
   dataDir?: string;
   /** Model provider override (defaults to MockModelProvider). */
   modelProvider?: ModelProvider;
+  /** Deployment identity configuration (OIDC providers + role mappings). When
+   *  omitted the kernel uses a dev identity (one mock user per workflow role). */
+  identity?: IdentityConfig;
 }
 
 export class FlowForgeKernel implements KernelApi {
@@ -136,6 +159,7 @@ export class FlowForgeKernel implements KernelApi {
   private readonly stateStore: StateStore;
   private readonly modelProvider: ModelProvider;
   private readonly dataDir: string | undefined;
+  private readonly identityConfig?: IdentityConfig;
 
   /** Loaded packages, keyed by package id. */
   private readonly loadedPackages = new Map<string, LoadedPackageEntry>();
@@ -147,6 +171,7 @@ export class FlowForgeKernel implements KernelApi {
 
   constructor(options: FlowForgeKernelOptions = {}) {
     this.dataDir = options.dataDir;
+    this.identityConfig = options.identity;
     this.modelProvider =
       options.modelProvider ?? new MockModelProvider(() => JSON.stringify({ note: 'mock response' }));
 
@@ -159,9 +184,14 @@ export class FlowForgeKernel implements KernelApi {
       for (const [id, entry] of Object.entries(this.readJsonFile<Record<string, RunIndexEntry>>('run-index.json', {}))) {
         this.runIndex.set(id, entry);
       }
-      for (const [, entry] of Object.entries(this.readJsonFile<Record<string, { dir: string }>>('packages.json', {}))) {
+      for (const [, entry] of Object.entries(
+        this.readJsonFile<Record<string, { dir: string; signing?: LoadedPackageEntry['signing'] }>>(
+          'packages.json',
+          {}
+        )
+      )) {
         try {
-          this.loadPackageInternal(entry.dir);
+          this.loadPackageInternal(entry.dir, entry.signing);
         } catch {
           // skip packages whose directory is no longer valid
         }
@@ -199,8 +229,43 @@ export class FlowForgeKernel implements KernelApi {
     return summary;
   }
 
+  /**
+   * Install a package from a `.workforce` archive.  Verifies integrity and
+   * signature first, unpacks into the data directory and loads it.  Tampered
+   * or engine-incompatible archives are refused; unsigned ones install but
+   * surface the unsigned provenance on the returned summary (Phase 4.1.4).
+   */
+  installWorkforceArchive(archivePath: string): PackageSummary {
+    if (!this.dataDir) {
+      throw new Error('installWorkforceArchive requires a dataDir (pass { dataDir } to FlowForgeKernel)');
+    }
+    const result = verifyWorkforceArchive(archivePath, { engineVersion: ENGINE_VERSION });
+    if (!result.hashesIntact || !result.valid) {
+      throw new Error(`Refusing to install ${archivePath}:\n  ${result.errors.join('\n  ')}`);
+    }
+    if (result.signed && result.signatureValid !== true) {
+      throw new Error(`Refusing to install ${archivePath}: signature is invalid`);
+    }
+    const id = result.packageId;
+    const version = result.packageVersion;
+    if (!id || !version) {
+      throw new Error(`Refusing to install ${archivePath}: archive manifest is missing package id/version`);
+    }
+    const destDir = join(this.dataDir, 'packages', `${id}-${version}`);
+    unpackWorkforce(archivePath, destDir);
+    const signing = {
+      signed: result.signed,
+      ...(result.signed
+        ? { signerFingerprint: result.signerFingerprint, publisher: undefined as string | undefined }
+        : {})
+    };
+    const summary = this.loadPackageInternal(destDir, signing);
+    this.savePackageRegistry();
+    return summary;
+  }
+
   listPackages(): PackageSummary[] {
-    return [...this.loadedPackages.values()].map(({ pkg }) => toPackageSummary(pkg));
+    return [...this.loadedPackages.values()].map(({ pkg, signing }) => toPackageSummary(pkg, signing));
   }
 
   removePackage(packageId: string): void {
@@ -279,7 +344,60 @@ export class FlowForgeKernel implements KernelApi {
     return { records, chainIntact: this.audit.verify() === -1 };
   }
 
+  // ---- Workflows (read-only graph access) ---------------------------------
+
+  getWorkflow(packageId: string, workflowId: string): WorkflowDefinition {
+    const { pkg } = this.entry(packageId);
+    const workflow = pkg.workflows.get(workflowId);
+    if (!workflow) throw new Error(`Unknown workflow '${workflowId}' in package '${packageId}'`);
+    return workflow;
+  }
+
   // ---- Identity -----------------------------------------------------------
+
+  listIdentityProviders(): IdentityProviderSummary[] {
+    if (!this.identity) return [];
+    return this.identity.registry.list().map((provider) => ({
+      id: provider.id,
+      displayName: provider.displayName,
+      type: provider.type
+    }));
+  }
+
+  getGovernance(): GovernanceSummary {
+    const records = this.audit.all();
+    const byActor = new Map<string, { provider?: string; roles: Set<string>; count: number; last?: string }>();
+    for (const record of records) {
+      let entry = byActor.get(record.actor.id);
+      if (!entry) {
+        entry = { roles: new Set(), count: 0 };
+        byActor.set(record.actor.id, entry);
+      }
+      entry.count += 1;
+      entry.last = record.action;
+      if (record.actor.provider) entry.provider = record.actor.provider;
+      for (const role of record.actor.roles ?? []) entry.roles.add(role);
+    }
+    return {
+      providers: this.identity?.registry.list().map((provider) => ({
+        id: provider.id,
+        displayName: provider.displayName,
+        type: provider.type
+      })) ?? [],
+      roleMappings: this.identityConfig?.roleMappings ?? [],
+      permissions: (this.identityConfig?.permissions ?? {}) as Record<string, string[]>,
+      session: this.identityConfig?.session ?? { ttlSeconds: 8 * 60 * 60 },
+      userAudit: [...byActor.entries()]
+        .map(([actorId, entry]) => ({
+          actorId,
+          provider: entry.provider,
+          roles: [...entry.roles].sort(),
+          recordCount: entry.count,
+          lastAction: entry.last
+        }))
+        .sort((a, b) => b.recordCount - a.recordCount)
+    };
+  }
 
   async signIn(role: string): Promise<UserSnapshot> {
     if (!this.identity) throw new Error('Load a package before signing in');
@@ -287,6 +405,37 @@ export class FlowForgeKernel implements KernelApi {
     const session = await this.identity.login('dev', { accessToken: `dev-${role}` });
     this.sessionId = session.id;
     return toUserSnapshot(session.principal);
+  }
+
+  async signInWithTokens(providerId: string, tokens: TokenSetLike): Promise<UserSnapshot> {
+    if (!this.identity) throw new Error('Load a package before signing in');
+    if (this.sessionId) this.signOut();
+    const session = await this.identity.login(providerId, tokens);
+    this.sessionId = session.id;
+    return toUserSnapshot(session.principal);
+  }
+
+  async beginOidcLogin(
+    providerId: string,
+    redirectUri: string
+  ): Promise<{ url: string; state: string; codeVerifier: string }> {
+    if (!this.identity) throw new Error('Load a package before signing in');
+    const provider = this.identity.registry.get(providerId);
+    if (provider.type !== 'oidc') throw new Error(`Provider '${providerId}' does not support OIDC flows`);
+    const request = await provider.beginAuthorization(redirectUri);
+    return { url: request.url, state: request.state, codeVerifier: request.codeVerifier };
+  }
+
+  async completeOidcLogin(
+    providerId: string,
+    code: string,
+    codeVerifier: string,
+    redirectUri: string
+  ): Promise<UserSnapshot> {
+    if (!this.identity) throw new Error('Load a package before signing in');
+    const provider = this.identity.registry.get(providerId);
+    const tokens = await provider.exchangeCode(code, codeVerifier, redirectUri);
+    return this.signInWithTokens(providerId, tokens);
   }
 
   signOut(): void {
@@ -302,8 +451,17 @@ export class FlowForgeKernel implements KernelApi {
   // ---- Private helpers ----------------------------------------------------
 
   /** Internal: load a package directory into memory without touching the registry file. */
-  private loadPackageInternal(packageDir: string): PackageSummary {
+  private loadPackageInternal(
+    packageDir: string,
+    signing?: LoadedPackageEntry['signing']
+  ): PackageSummary {
     const pkg = loadWorkforcePackage(packageDir);
+    const compat = checkEngineCompatibility(pkg.manifest.engineVersion, ENGINE_VERSION);
+    if (!compat.compatible) {
+      throw new Error(
+        `Package '${pkg.manifest.id}' is not compatible with engine ${ENGINE_VERSION}: ${compat.reason}`
+      );
+    }
     const models = new ModelRegistry()
       .set('small', this.modelProvider)
       .set('medium', this.modelProvider)
@@ -314,9 +472,9 @@ export class FlowForgeKernel implements KernelApi {
       this.audit,
       this.stateStore
     );
-    this.loadedPackages.set(pkg.manifest.id, { pkg, engine });
+    this.loadedPackages.set(pkg.manifest.id, { pkg, engine, signing });
     this.rebuildIdentity();
-    return toPackageSummary(pkg);
+    return toPackageSummary(pkg, signing);
   }
 
   private entry(packageId: string): LoadedPackageEntry {
@@ -330,7 +488,12 @@ export class FlowForgeKernel implements KernelApi {
     return this.identity.getSession(this.sessionId)?.principal;
   }
 
-  /** Rebuild the dev identity service over all roles in all loaded packages. */
+  /**
+   * Rebuild the identity service over all roles in all loaded packages. With a
+   * deployment identity config the configured OIDC providers and role mappings
+   * are preserved and the dev mock provider is always available for quick
+   * role-based sign-in during development.
+   */
   private rebuildIdentity(): void {
     const roles = new Set<string>();
     for (const { pkg } of this.loadedPackages.values()) {
@@ -339,13 +502,23 @@ export class FlowForgeKernel implements KernelApi {
       }
     }
     const config: IdentityConfig = {
-      providers: [{ id: 'dev', type: 'mock' }],
-      roleMappings: [...roles].map((role) => ({ claim: 'role', value: role, role }))
+      providers: [
+        ...(this.identityConfig?.providers ?? []),
+        ...(this.identityConfig?.providers.some((p) => p.id === 'dev')
+          ? []
+          : [{ id: 'dev' as const, type: 'mock' as const }])
+      ],
+      roleMappings: [
+        ...(this.identityConfig?.roleMappings ?? []),
+        ...[...roles].map((role) => ({ claim: 'role', value: role, role }))
+      ]
     };
     const service = IdentityService.fromConfig(config, this.audit);
-    const provider = service.registry.get('dev') as MockIdentityProvider;
-    for (const role of roles) {
-      provider.addUser(`dev-${role}`, { sub: `dev-${role}`, name: `Dev ${role}`, role });
+    const provider = service.registry.get('dev') as MockIdentityProvider | undefined;
+    if (provider) {
+      for (const role of roles) {
+        provider.addUser(`dev-${role}`, { sub: `dev-${role}`, name: `Dev ${role}`, role });
+      }
     }
     this.identity = service;
     this.sessionId = undefined;
@@ -373,9 +546,9 @@ export class FlowForgeKernel implements KernelApi {
   }
 
   private savePackageRegistry(): void {
-    const registry: Record<string, { dir: string }> = {};
-    for (const { pkg } of this.loadedPackages.values()) {
-      registry[pkg.manifest.id] = { dir: pkg.rootDir };
+    const registry: Record<string, { dir: string; signing?: LoadedPackageEntry['signing'] }> = {};
+    for (const { pkg, signing } of this.loadedPackages.values()) {
+      registry[pkg.manifest.id] = { dir: pkg.rootDir, ...(signing ? { signing } : {}) };
     }
     this.writeJsonFile('packages.json', registry);
   }
@@ -389,12 +562,15 @@ export class FlowForgeKernel implements KernelApi {
 export type {
   AuditFilter,
   AuditTrailSnapshot,
+  GovernanceSummary,
   HumanResponse,
+  IdentityProviderSummary,
   KernelApi,
   PackageSummary,
   PackageValidationResult,
   PendingTaskSnapshot,
   RunSnapshot,
+  TokenSetLike,
   UserSnapshot,
   WorkflowSummary,
   AgentSummary,

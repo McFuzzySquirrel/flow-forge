@@ -1,0 +1,55 @@
+# FlowForge hosted dev stack (Phase 4.3.4)
+#
+#   docker compose -f docker/docker-compose.yml up --build
+#
+# Brings up the infrastructure the Dapr runner needs:
+#   redis  — Dapr state store (run snapshots + the workflow runtime's durable store)
+#   chroma — vector store for agent memory (embedded in the worker otherwise)
+#   dapr-worker — the FlowForge worker with a daprd sidecar, serving every
+#                 workflow in fixtures/Grade7-Maths.workforce (mounted read-only)
+#
+# The worker writes run snapshots through DaprStateStoreAdapter so a CLI client
+# in another container (DAPR_HTTP_PORT set) can drive the same runs.
+name: flowforge
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  chroma:
+    image: chromadb/chroma:0.4.24
+    ports:
+      - "8000:8000"
+    volumes:
+      - chroma-data:/data
+
+  dapr-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: ["node", "worker.mjs", "/workforce"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      DAPR_HTTP_PORT: "3500"
+      DAPR_GRPC_PORT: "50001"
+    ports:
+      - "3500:3500"
+      - "50001:50001"
+      - "3000:3000"
+    volumes:
+      - ../fixtures/Grade7-Maths.workforce:/workforce:ro
+      - ../fixtures/Corporate-Onboarding.workforce:/workforce-onboarding:ro
+      - flowforge-data:/data
+
+volumes:
+  chroma-data:
+  flowforge-data:

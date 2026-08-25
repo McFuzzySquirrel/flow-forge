@@ -42,6 +42,10 @@ export interface DeviceAuthorization {
  */
 export interface IdentityProvider {
   readonly id: string;
+  /** Provider kind discriminator. */
+  readonly type: 'oidc' | 'mock';
+  /** Human-readable provider name from configuration (for login buttons). */
+  readonly displayName?: string;
   /** Begin an authorization-code + PKCE flow (interactive surfaces). */
   beginAuthorization(redirectUri: string): Promise<AuthorizationRequest>;
   /** Exchange an authorization code (plus PKCE verifier) for tokens. */
@@ -87,6 +91,8 @@ function toTokenSet(data: TokenResponse): TokenSet {
 /** Generic OIDC provider driven by the issuer's discovery document. */
 export class OidcIdentityProvider implements IdentityProvider {
   readonly id: string;
+  readonly type = 'oidc' as const;
+  readonly displayName?: string;
   private readonly issuer: string;
   private readonly clientId: string;
   private readonly scopes: string[];
@@ -97,6 +103,7 @@ export class OidcIdentityProvider implements IdentityProvider {
       throw new Error(`OIDC provider '${config.id}' requires 'issuer' and 'clientId'`);
     }
     this.id = config.id;
+    this.displayName = config.displayName;
     this.issuer = config.issuer.replace(/\/$/, '');
     this.clientId = config.clientId;
     this.scopes = config.scopes ?? ['openid', 'profile', 'email'];
@@ -217,6 +224,8 @@ export class OidcIdentityProvider implements IdentityProvider {
  */
 export class MockIdentityProvider implements IdentityProvider {
   readonly id: string;
+  readonly type = 'mock' as const;
+  readonly displayName = 'Dev identity';
   private readonly tokenClaims: Map<string, ClaimSet>;
 
   constructor(id = 'mock', tokenClaims: Record<string, ClaimSet> = {}) {

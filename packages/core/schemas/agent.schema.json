@@ -68,12 +68,12 @@
     },
     "permissions": {
       "type": "object",
-      "description": "What this agent is allowed to see and do. Enforced by the runtime.",
+      "description": "What this agent is allowed to see and do. Enforced by the runtime. Key names are domain-neutral so any workforce package (education, onboarding, compliance) can declare them.",
       "additionalProperties": false,
       "properties": {
-        "canSeeRubricAnswers": { "type": "boolean", "default": false },
+        "canSeeAnswers": { "type": "boolean", "default": false },
         "canGrade": { "type": "boolean", "default": false },
-        "canAccessLearnerHistory": { "type": "boolean", "default": false },
+        "canAccessHistory": { "type": "boolean", "default": false },
         "network": { "type": "boolean", "default": false }
       }
     },

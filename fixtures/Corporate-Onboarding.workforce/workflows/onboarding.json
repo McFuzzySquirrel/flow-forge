@@ -1,0 +1,95 @@
+{
+  "id": "onboarding",
+  "name": "New Hire Onboarding",
+  "description": "HR plans, Buddy welcomes, Compliance checks paperwork, a compliance officer and the hiring manager approve before accounts are issued.",
+  "start": "collect-details",
+  "state": {
+    "details": null,
+    "plan": null,
+    "expectations": null,
+    "guide": null,
+    "complianceReport": null,
+    "managerNote": null
+  },
+  "nodes": [
+    {
+      "id": "collect-details",
+      "type": "humanInput",
+      "role": "hr",
+      "prompt": "Enter the new hire's role, start date, and which documents have been received.",
+      "output": "details",
+      "next": "plan"
+    },
+    {
+      "id": "plan",
+      "type": "agent",
+      "agent": "hr-planner",
+      "action": "Turn the new hire's details into a sequenced two-week onboarding plan.",
+      "inputs": ["details"],
+      "output": "plan",
+      "retry": { "maxAttempts": 2 },
+      "next": "new-hire-intro"
+    },
+    {
+      "id": "new-hire-intro",
+      "type": "humanInput",
+      "role": "employee",
+      "prompt": "Introduce yourself: your role, and what you most want from your first month.",
+      "output": "expectations",
+      "next": "welcome-guide"
+    },
+    {
+      "id": "welcome-guide",
+      "type": "agent",
+      "agent": "buddy",
+      "action": "Turn the plan and the new hire's expectations into a friendly welcome guide.",
+      "inputs": ["plan", "expectations"],
+      "output": "guide",
+      "next": "compliance-check"
+    },
+    {
+      "id": "compliance-check",
+      "type": "agent",
+      "agent": "compliance",
+      "action": "Check the new hire's paperwork against the handbook checklist and report PASS/GAP per item.",
+      "inputs": ["details", "plan"],
+      "output": "complianceReport",
+      "retry": { "maxAttempts": 2 },
+      "next": "compliance-approval"
+    },
+    {
+      "id": "compliance-approval",
+      "type": "humanApproval",
+      "role": "compliance-officer",
+      "subject": "complianceReport",
+      "onApprove": "manager-review",
+      "onReject": "compliance-fix"
+    },
+    {
+      "id": "compliance-fix",
+      "type": "humanInput",
+      "role": "hr",
+      "prompt": "Record what the new hire has now provided to resolve the compliance gaps.",
+      "output": "remediation",
+      "next": "compliance-check"
+    },
+    {
+      "id": "manager-review",
+      "type": "agent",
+      "agent": "manager-review",
+      "action": "Review the welcome guide against the new hire's expectations and recommend approve or revise.",
+      "inputs": ["guide", "expectations", "complianceReport"],
+      "output": "managerNote",
+      "next": "manager-approval"
+    },
+    {
+      "id": "manager-approval",
+      "type": "humanApproval",
+      "role": "manager",
+      "subject": "managerNote",
+      "onApprove": "done",
+      "onReject": "welcome-guide"
+    },
+    { "id": "done", "type": "end" }
+  ]
+}

@@ -5,37 +5,29 @@ milestones and tasks, and every milestone includes a **📚 Learn while you buil
 explains the concepts, patterns and trade-offs involved — so the plan doubles as a learning
 companion.
 
-**Where we are:** Phase 0 (Foundations), Phase 1 (Kernel), Phase 2 (Headless completeness & kernel API hardening), and most of Phase 3 (Differentiators) are complete. The monorepo builds
-(`pnpm build`), tests pass (`pnpm test`), and the CLI can validate, inspect and headlessly run the
-`Grade7-Maths.workforce` reference package with the mock model provider. The identity kernel
-(ADR-0010) has also landed: `packages/identity` provides OIDC sign-in, claim-to-role mapping and
-sessions, and `WorkflowEngine.resume` now requires an authenticated `Principal` with role checks
-and per-run participant binding (tasks I.1–I.5 below). Phase 3 milestones 3.1 (persona
-enforcement), 3.2 (Coach & Reflection agents), 3.3.2 (memory write policy) and 3.4 (graph
-validation) are shipped; **Milestone 3.3 is now complete**: Chroma VectorStore adapter with
-`EmbeddingProvider` abstraction, `FileVectorStore` for file-backed persistence, namespace isolation
-tests, and retention/decay knobs (`maxItems`, `maxAgeMs`) are all landed.
+**Where we are:** Phase 0 (Foundations), Phase 1 (Kernel), Phase 2 (Headless completeness & kernel API hardening), Phase 3 (Differentiators), **Phase 4 (Ecosystem) and Phase 5 (UI layer) are now complete.** The monorepo builds
+(`pnpm build`), tests pass (`pnpm test`), lint passes (`pnpm lint`), and the CLI can validate, inspect and headlessly run both the `Grade7-Maths.workforce` and `Corporate-Onboarding.workforce` reference packages with the mock model provider. The identity kernel (ADR-0010) is live (`packages/identity`, `WorkflowEngine.resume` principal enforcement), and the desktop app (Phase 5) is a full multi-view client over the frozen `KernelApi`.
 
-**Phase 2 is complete (see ADR-0011).** The original "Vertical Slice UI" phase was replaced by
-**Headless completeness & kernel API hardening** — all milestones landed. **Phase 3 is now
-complete** — persona enforcement, Coach/Reflection agents, declarative memory write policy,
-`flowforge validate --graph`, and the full long-term memory stack (ChromaVectorStore, FileVectorStore,
-EmbeddingProvider abstraction, namespace isolation, retention/decay).
-**Next up is Phase 4** (ecosystem: package registry, SDK, Dapr runner).
+**Phase 4 is complete (ecosystem):** deterministic `.workforce` archives with Ed25519 signing (`flowforge pack`/`unpack`/`verify`/`keygen`), install-time verification and `engineVersion` compatibility checks, the second-domain `Corporate-Onboarding.workforce` package (proving the format is domain-agnostic) with a domain-language audit and `docs/authoring-packages.md`, and a Dapr Workflows runner behind the shared `WorkflowRunner` interface with a conformance suite (one spec, two runners) plus a Docker Compose stack.
+
+**Phase 5 is complete (UI layer):** the Electron app gained the install flow, workforce home, teacher and learner portals, audit viewer, OIDC authorization-code + PKCE login (I.6), an admin governance view (I.8), and a visual workflow editor (React Flow) with read-only rendering, live-run overlay, editing, continuous validation and an in-editor dry run. Mobile (Milestone 5.3) was not pursued — per the plan, it is "if pursued".
 
 **Try the current slice:** after `pnpm install && pnpm build`:
 - `flowforge validate fixtures/Grade7-Maths.workforce` — validate the reference package
 - `flowforge validate fixtures/Grade7-Maths.workforce --graph` — also check workflow graph reachability
+- `flowforge validate fixtures/Corporate-Onboarding.workforce` — the second-domain package
 - `flowforge inspect fixtures/Grade7-Maths.workforce` — show agents, skills, personas, workflows
 - `flowforge run fixtures/Grade7-Maths.workforce assignment --mock` — interactive run via stdin
 - `flowforge run fixtures/Grade7-Maths.workforce assignment --mock --answers answers.json` — non-interactive CI run
-- `flowforge run fixtures/Grade7-Maths.workforce assignment --mock --persona supportive-mentor` — run with a specific persona
+- `flowforge run fixtures/Corporate-Onboarding.workforce onboarding --mock --answers answers.json` — onboarding run
 - `flowforge run fixtures/Grade7-Maths.workforce revision --mock --answers answers.json` — run the Coach/Reflection revision workflow
 - `flowforge runs list` — list persisted runs (from `~/.flowforge`)
 - `flowforge audit show` — view audit records; `audit verify` checks chain integrity
 - `flowforge audit show --run <a> --run <b>` — A/B compare personas and scores across two runs
 - `flowforge memory list <packageId>/<agentId> --data-dir ~/.flowforge` — browse an agent's memory items
 - `flowforge memory delete <packageId>/<agentId> <item-id> --data-dir ~/.flowforge` — delete an item ("right to forget")
+- `flowforge pack fixtures/Grade7-Maths.workforce --signing-key key.pem` / `flowforge verify <archive>` — package, sign, verify
+- `pnpm --filter @flowforge/desktop dev` — launch the desktop app (Phase 5 UI)
 
 **Design rules that govern everything below** (see README):
 
@@ -315,12 +307,12 @@ identity were scattered across env vars, flags and manual install steps. This mi
 
 ---
 
-## Phase 4 — Ecosystem
+## Phase 4 — Ecosystem *(complete)*
 
 **Goal:** make workforce packages a real ecosystem artefact — exportable, signed, provably
 domain-agnostic (second package), and runnable on production-grade infrastructure (Dapr Workflows).
 
-### Milestone 4.1 — Package export & signing
+### Milestone 4.1 — Package export & signing ✔ (landed)
 
 | # | Task | Done when |
 | --- | --- | --- |
@@ -342,7 +334,7 @@ domain-agnostic (second package), and runnable on production-grade infrastructur
 - **Ed25519** is a modern signature scheme: small keys, fast, no parameter foot-guns — the default
   choice for exactly this kind of artefact signing.
 
-### Milestone 4.2 — Second domain package: Corporate-Onboarding
+### Milestone 4.2 — Second domain package: Corporate-Onboarding ✔ (landed)
 
 | # | Task | Done when |
 | --- | --- | --- |
@@ -361,7 +353,7 @@ domain-agnostic (second package), and runnable on production-grade infrastructur
   *platform*. Writing the authoring guide forces you to articulate the platform's contract — if
   it's hard to document, it's hard to use.
 
-### Milestone 4.3 — Dapr Workflows runner
+### Milestone 4.3 — Dapr Workflows runner ✔ (landed; live-sidecar conformance runs against `docker/docker-compose.yml`)
 
 | # | Task | Done when |
 | --- | --- | --- |
@@ -394,7 +386,7 @@ domain-agnostic (second package), and runnable on production-grade infrastructur
 
 ---
 
-## Phase 5 — UI layer(s) *(new — ADR-0011)*
+## Phase 5 — UI layer(s) *(new — ADR-0011)* *(complete; mobile not pursued)*
 
 **Goal:** thin UI clients over the frozen `KernelApi`. The kernel contains all business logic;
 the UI is a rendering and interaction layer only. Exit criterion: **every user action in the UI

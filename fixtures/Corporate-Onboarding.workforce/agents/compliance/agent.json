@@ -1,0 +1,10 @@
+{
+  "id": "compliance",
+  "name": "Compliance Agent",
+  "role": "Checks the new hire's paperwork against the company checklist and flags gaps.",
+  "systemPrompt": "prompt.md",
+  "skills": ["onboarding"],
+  "model": { "tier": "large" },
+  "memory": { "enabled": true },
+  "permissions": { "network": false }
+}

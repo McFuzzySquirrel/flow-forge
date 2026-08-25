@@ -25,12 +25,15 @@ packages/
   agents/              @flowforge/agents    — agent runtime + model provider abstraction (mock / Ollama / DeepSeek / OpenAI-compatible)
   memory/              @flowforge/memory    — per-agent memory service (swappable vector store)
   audit/               @flowforge/audit     — append-only, hash-chained audit log
-  workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching)
+  workflow/            @flowforge/workflow  — embedded workflow engine (pause/resume, retries, branching) + WorkflowRunner interface & conformance suite
+  packaging/           @flowforge/packaging — deterministic .workforce archives, hash manifests, Ed25519 signing
+  dapr-runner/         @flowforge/dapr-runner — Dapr Workflows implementation of WorkflowRunner
   identity/            @flowforge/identity  — OIDC identity, claim-to-role mapping, sessions (ADR-0010)
-  cli/                 @flowforge/cli       — flowforge validate | inspect | run
-  desktop/             @flowforge/desktop   — Electron + React desktop shell (parked after Phase 2.1; richer UI resumes in Phase 5)
+  cli/                 @flowforge/cli       — flowforge validate | inspect | run | pack | verify | ...
+  desktop/             @flowforge/desktop   — Electron + React desktop shell (Phase 5 UI + visual workflow editor)
 fixtures/
-  Grade7-Maths.workforce/                   — reference workforce package
+  Grade7-Maths.workforce/                   — reference workforce package (education)
+  Corporate-Onboarding.workforce/           — second-domain workforce package (onboarding)
 ```
 
 ## Getting started
@@ -59,10 +62,11 @@ Once configured, all commands below pick up the provider, models and data direct
 config automatically — pass `--provider`/`--api-key`/`--data-dir` to override per-run.
 
 ```bash
-# validate & explore the reference package
+# validate & explore the reference package (and the second-domain package)
 node packages/cli/dist/index.js validate fixtures/Grade7-Maths.workforce
 node packages/cli/dist/index.js validate fixtures/Grade7-Maths.workforce --graph
 node packages/cli/dist/index.js inspect fixtures/Grade7-Maths.workforce
+node packages/cli/dist/index.js validate fixtures/Corporate-Onboarding.workforce
 
 # run the assignment workflow headlessly (mock model, interactive human steps)
 node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment --mock
@@ -73,6 +77,9 @@ node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment -
 # run the Coach/Reflection revision workflow non-interactively
 node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce revision --mock --answers answers.json
 
+# run the corporate onboarding workflow non-interactively
+node packages/cli/dist/index.js run fixtures/Corporate-Onboarding.workforce onboarding --mock --answers answers.json
+
 # inspect persisted runs and audit trail
 node packages/cli/dist/index.js runs list
 node packages/cli/dist/index.js audit show
@@ -82,8 +89,18 @@ node packages/cli/dist/index.js audit verify
 node packages/cli/dist/index.js memory list dev.flowforge.grade7-maths/coach --data-dir ~/.flowforge
 node packages/cli/dist/index.js memory delete dev.flowforge.grade7-maths/coach <item-id> --data-dir ~/.flowforge
 
-# try the desktop shell (Electron + React, dev-identity sign-in, parked Phase 2.1 shell)
+# ecosystem: pack a package into a deterministic archive, sign it, verify it
+node packages/cli/dist/index.js keygen ~/flowforge-signing.pem
+node packages/cli/dist/index.js pack fixtures/Grade7-Maths.workforce --signing-key ~/flowforge-signing.pem --publisher "You"
+node packages/cli/dist/index.js verify dev.flowforge.grade7-maths-1.0.0.workforce
+node packages/cli/dist/index.js unpack dev.flowforge.grade7-maths-1.0.0.workforce --output ~/unpacked
+
+# launch the desktop app (Phase 5 UI: home, portals, audit, governance, visual editor)
 pnpm --filter @flowforge/desktop dev
+
+# Dapr runner: conformance suite + hosted stack
+pnpm vitest run packages/workflow packages/dapr-runner
+docker compose -f docker/docker-compose.yml up --build
 ```
 
 ## Design rules
