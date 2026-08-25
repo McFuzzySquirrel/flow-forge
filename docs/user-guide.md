@@ -49,15 +49,20 @@ pnpm build
 pnpm test
 ```
 
-**Readable command.** The CLI binary lives at
-`node packages/cli/dist/index.js`. For the rest of this guide, define an alias
-so the examples are short:
+**Making `flowforge` a command.** The CLI binary lives at
+`node packages/cli/dist/index.js`; `pnpm install` also links it into
+`node_modules/.bin/`, so `pnpm exec flowforge …` works inside the repo. To get a
+system-wide `flowforge` command, run once:
 
 ```bash
-alias flowforge='node packages/cli/dist/index.js'
+pnpm setup            # add pnpm's global bin directory to your shell PATH
+pnpm link --global ./packages/cli
 ```
 
-> Every `flowforge` command below means `node packages/cli/dist/index.js`.
+then open a new terminal — `flowforge …` works from anywhere.
+
+> Every `flowforge` command below means `node packages/cli/dist/index.js`
+> (or `pnpm exec flowforge …` / the globally-linked `flowforge`).
 
 ---
 

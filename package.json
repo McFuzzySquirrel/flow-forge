@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
+    "@flowforge/cli": "workspace:*",
     "@types/node": "^22.20.1",
     "eslint": "^9.0.0",
     "typescript": "^5.5.0",

@@ -32,10 +32,18 @@ pnpm install
 pnpm build
 ```
 
+This installs the CLI's `flowforge` command:
+
+- **In the repo:** `pnpm exec flowforge …` (the binary is linked into
+  `node_modules/.bin/`).
+- **System-wide:** `pnpm setup` (once) then `pnpm link --global ./packages/cli`,
+  then `flowforge …` works from anywhere in a new terminal.
+- **Plain node:** `node packages/cli/dist/index.js …` always works.
+
 Then run a full classroom workflow (teacher → student → teacher, all scripted):
 
 ```bash
-node packages/cli/dist/index.js run fixtures/Grade7-Maths.workforce assignment --mock \
+flowforge run fixtures/Grade7-Maths.workforce assignment --mock \
   --answers answers.json
 ```
 
@@ -52,15 +60,12 @@ with `answers.json`:
 The run completes, the audit trail prints, and it's persisted to `~/.flowforge`:
 
 ```bash
-node packages/cli/dist/index.js runs list
-node packages/cli/dist/index.js audit verify
+flowforge runs list
+flowforge audit verify
 ```
 
 **Prefer a UI?** `pnpm --filter @flowforge/desktop dev` opens the desktop app
 (home, portals, audit viewer, governance, visual workflow editor).
-
-For a friendlier alias throughout this README, use `flowforge` for
-`node packages/cli/dist/index.js`.
 
 ---
 
