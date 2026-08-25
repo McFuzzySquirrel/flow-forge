@@ -265,6 +265,7 @@ published it. To author your own package from scratch, follow the
 | "Package is not compatible with engine" | The package declares an `engineVersion` range your build doesn't satisfy — upgrade the engine or use a compatible package |
 | Ollama connection refused | `ollama serve`, and confirm the model is pulled (`ollama pull llama3.2`) |
 | Chroma/Dapr services missing | Only needed for those integrations — see [Dapr runner](dapr-runner.md) and `docker compose -f docker/docker-compose.yml up --build` |
+| Desktop app aborts with a `chrome-sandbox` / SUID sandbox error on Linux | Chromium's sandbox needs a root-owned setuid helper that npm installs rarely provide. The dev harness already passes `--no-sandbox` on Linux; for production set it up once: `sudo chown root:root node_modules/electron/dist/chrome-sandbox && sudo chmod 4755 node_modules/electron/dist/chrome-sandbox` |
 
 ---
 
