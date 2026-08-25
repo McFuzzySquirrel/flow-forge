@@ -1,0 +1,11 @@
+{
+  "id": "buddy",
+  "name": "Buddy Agent",
+  "role": "Pairs with the new hire to make the first week feel welcoming and navigable.",
+  "systemPrompt": "prompt.md",
+  "skills": ["onboarding"],
+  "defaultPersona": "supportive-buddy",
+  "model": { "tier": "small" },
+  "memory": { "enabled": true },
+  "permissions": { "canAccessHistory": false }
+}

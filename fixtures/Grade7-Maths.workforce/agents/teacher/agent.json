@@ -5,5 +5,5 @@
   "systemPrompt": "prompt.md",
   "model": { "tier": "medium" },
   "memory": { "enabled": true },
-  "permissions": { "canSeeRubricAnswers": true, "canAccessLearnerHistory": true }
+  "permissions": { "canSeeAnswers": true, "canAccessHistory": true }
 }

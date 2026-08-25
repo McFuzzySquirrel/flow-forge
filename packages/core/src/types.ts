@@ -7,6 +7,8 @@ export interface WorkforcePackageManifest {
   version: string;
   description?: string;
   domain?: string;
+  /** Semver range the engine must satisfy to run this package (checked at install, Phase 4). */
+  engineVersion?: string;
   authors?: string[];
   license?: string;
   agents: string[];
@@ -36,9 +38,9 @@ export interface AgentDefinition {
   };
   memory?: { enabled?: boolean; namespace?: string };
   permissions?: {
-    canSeeRubricAnswers?: boolean;
+    canSeeAnswers?: boolean;
     canGrade?: boolean;
-    canAccessLearnerHistory?: boolean;
+    canAccessHistory?: boolean;
     network?: boolean;
   };
   outputSchema?: Record<string, unknown>;
@@ -191,6 +193,8 @@ export interface AuditRecord {
   confidence?: number;
   override?: { originalValue: unknown; newValue: unknown; reason: string };
   detail?: Record<string, unknown>;
+  /** Section of the evaluation criteria a score relates to (domain-neutral). */
+  section?: string;
   previousHash: string;
   hash: string;
 }

@@ -18,6 +18,7 @@
     "@flowforge/identity": "workspace:*",
     "@flowforge/kernel": "workspace:*",
     "@flowforge/memory": "workspace:*",
+    "@flowforge/packaging": "workspace:*",
     "@flowforge/packages": "workspace:*",
     "@flowforge/workflow": "workspace:*"
   },

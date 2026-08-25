@@ -11,7 +11,7 @@
  * Snapshot types are plain records with no methods, no circular refs, and no
  * class instances.  They survive JSON round-trips and Electron structuredClone.
  */
-import type { AuditRecord } from '@flowforge/core';
+import type { AuditRecord, WorkflowDefinition } from '@flowforge/core';
 
 // ---------------------------------------------------------------------------
 // Snapshot types
@@ -49,6 +49,14 @@ export interface PackageSummary {
   dir: string;
   agents: AgentSummary[];
   workflows: WorkflowSummary[];
+  /** Package branding for the home screen. */
+  branding?: { displayName?: string; primaryColor?: string; icon?: string };
+  /** Provenance recorded at install time (Phase 4). Undefined when unknown. */
+  signing?: {
+    signed: boolean;
+    signerFingerprint?: string;
+    publisher?: string;
+  };
 }
 
 export interface PendingTaskSnapshot {
@@ -78,6 +86,39 @@ export interface UserSnapshot {
   displayName?: string;
   provider: string;
   roles: string[];
+}
+
+/** A configured identity provider surfaced to UIs (never exposes secrets). */
+export interface IdentityProviderSummary {
+  id: string;
+  displayName?: string;
+  type: 'oidc' | 'mock';
+}
+
+/** Per-user governance summary for the admin view (I.8). */
+export interface UserAuditSummary {
+  actorId: string;
+  provider?: string;
+  roles: string[];
+  recordCount: number;
+  lastAction?: string;
+}
+
+/** Read-only governance snapshot (5.1.8). */
+export interface GovernanceSummary {
+  providers: IdentityProviderSummary[];
+  roleMappings: Array<{ claim: string; value: string; role: string }>;
+  permissions: Record<string, string[]>;
+  session: { ttlSeconds?: number };
+  userAudit: UserAuditSummary[];
+}
+
+/** Tokens produced by an identity provider flow (IPC-only, never persisted). */
+export interface TokenSetLike {
+  accessToken: string;
+  idToken?: string;
+  refreshToken?: string;
+  expiresAt?: number;
 }
 
 export interface HumanResponse {
@@ -122,9 +163,18 @@ export interface KernelApi {
   /**
    * Validate and load a package into this kernel instance.  Persists the
    * package to the data directory (if one is configured) so it survives
-   * process restart.
+   * process restart.  A package whose declared `engineVersion` range the
+   * running engine does not satisfy is refused (Phase 4.1.5).
    */
   loadPackage(packageDir: string): PackageSummary;
+
+  /**
+   * Install a package from a `.workforce` archive: verify integrity and
+   * signature, unpack into the data directory, then load it.  Refuses
+   * tampered or engine-incompatible packages; unsigned archives install
+   * with a warning flag on the summary.
+   */
+  installWorkforceArchive(archivePath: string): PackageSummary;
 
   /** List all loaded / installed packages. */
   listPackages(): PackageSummary[];
@@ -150,19 +200,60 @@ export interface KernelApi {
   /** Get a single run by id. */
   getRun(runId: string): Promise<RunSnapshot | undefined>;
 
+  /**
+   * Import an externally-executed run (e.g. one driven by the CLI's own
+   * engine) plus its audit records into this kernel's persistence, so
+   * `runs list`/`audit show` reflect headless CLI runs too.
+   */
+  importRun(packageDir: string, run: import('@flowforge/workflow').WorkflowRun, auditRecords: AuditRecord[]): RunSnapshot;
+
   // ---- Audit --------------------------------------------------------------
 
   /** Return audit records, optionally filtered. */
   getAuditTrail(filter?: AuditFilter): AuditTrailSnapshot;
 
+  // ---- Workflows (read-only graph access for editors / viewers) -----------
+
+  /** Get a loaded workflow's full definition (the visual editor renders this). */
+  getWorkflow(packageId: string, workflowId: string): WorkflowDefinition;
+
   // ---- Identity -----------------------------------------------------------
+
+  /** Configured identity providers (mock + any deployment OIDC providers). */
+  listIdentityProviders(): IdentityProviderSummary[];
+
+  /** Read-only governance snapshot: providers, role mappings, per-user audit. */
+  getGovernance(): GovernanceSummary;
 
   /**
    * Sign in using the dev identity provider (one mock user per role).
    * OIDC authorization-code + PKCE replaces this when a deployment identity
-   * config is supplied (I.6, deferred to Phase 5 — ADR-0011).
+   * config is supplied (I.6).
    */
   signIn(role: string): Promise<UserSnapshot>;
+
+  /**
+   * Sign in with tokens from an OIDC authorization-code + PKCE flow. The
+   * transport adapter (e.g. the Electron main process) performs the browser +
+   * loopback-redirect dance and hands the exchanged tokens to the kernel; the
+   * kernel is the authorization authority (ADR-0010).
+   */
+  signInWithTokens(providerId: string, tokens: TokenSetLike): Promise<UserSnapshot>;
+
+  /**
+   * Begin an OIDC authorization-code + PKCE flow (I.6). Returns the
+   * authorization URL to open in a browser plus the state/PKCE verifier the
+   * adapter must hand back to {@link completeOidcLogin} after the redirect.
+   */
+  beginOidcLogin(providerId: string, redirectUri: string): Promise<{ url: string; state: string; codeVerifier: string }>;
+
+  /** Complete an OIDC authorization-code + PKCE flow with the callback's code. */
+  completeOidcLogin(
+    providerId: string,
+    code: string,
+    codeVerifier: string,
+    redirectUri: string
+  ): Promise<UserSnapshot>;
 
   signOut(): void;
 

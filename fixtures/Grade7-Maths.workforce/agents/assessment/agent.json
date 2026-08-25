@@ -7,5 +7,5 @@
   "defaultPersona": "strict-examiner",
   "model": { "tier": "large" },
   "memory": { "enabled": true },
-  "permissions": { "canSeeRubricAnswers": true, "canGrade": true }
+  "permissions": { "canSeeAnswers": true, "canGrade": true }
 }

@@ -18,7 +18,8 @@
     "@flowforge/kernel": "workspace:*",
     "@flowforge/memory": "workspace:*",
     "@flowforge/packages": "workspace:*",
-    "@flowforge/workflow": "workspace:*"
+    "@flowforge/workflow": "workspace:*",
+    "@xyflow/react": "^12.11.3"
   },
   "devDependencies": {
     "@types/node": "^22",

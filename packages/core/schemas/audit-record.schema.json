@@ -63,7 +63,10 @@
         }
       }
     },
-    "rubricSection": { "type": "string" },
+    "section": {
+      "type": "string",
+      "description": "Which section of the evaluation criteria a score relates to (domain-neutral; e.g. an assessment rubric section or a compliance checklist item)."
+    },
     "score": { "type": "number" },
     "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "override": {

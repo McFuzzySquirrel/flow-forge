@@ -28,6 +28,11 @@
       "type": "string",
       "description": "Domain this workforce serves, e.g. 'education', 'compliance', 'onboarding'."
     },
+    "engineVersion": {
+      "type": "string",
+      "description": "Semver range the running engine must satisfy to run this package, e.g. '>=0.1.0'. Refused at install when unmet (supply-chain compatibility, Phase 4).",
+      "examples": [">=0.1.0", "^0.1.0", "~0.1.0", ">=0.1.0 <1.0.0"]
+    },
     "authors": { "type": "array", "items": { "type": "string" } },
     "license": { "type": "string" },
     "agents": {

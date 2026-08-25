@@ -33,7 +33,7 @@ function makeEngine() {
       return JSON.stringify({
         score: 82,
         confidence: 0.9,
-        rubricSection: 'Criterion A — Method',
+        section: 'Criterion A — Method',
         evidence: [{ source: 'submission', excerpt: 'subtract 3 from both sides' }]
       });
     }
@@ -178,7 +178,7 @@ describe('WorkflowEngine — Grade7-Maths end-to-end (Phase 1 milestone gate)', 
     const assessRecord = audit.all().find((r) => r.nodeId === 'assess' && r.action === 'agent.step')!;
     expect(assessRecord.score).toBe(82);
     expect(assessRecord.confidence).toBe(0.9);
-    expect(assessRecord.rubricSection).toContain('Criterion A');
+    expect(assessRecord.section).toContain('Criterion A');
     expect(assessRecord.promptVersion).toBeTruthy();
     expect(assessRecord.model).toMatchObject({ provider: 'mock' });
   });

@@ -1,0 +1,10 @@
+{
+  "id": "hr-planner",
+  "name": "HR Planner",
+  "role": "Gathers new-hire details and sequences the first-week onboarding plan.",
+  "systemPrompt": "prompt.md",
+  "skills": ["onboarding"],
+  "model": { "tier": "medium" },
+  "memory": { "enabled": true },
+  "permissions": { "canAccessHistory": false }
+}

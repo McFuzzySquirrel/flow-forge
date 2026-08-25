@@ -31,6 +31,15 @@ export class IdentityRegistry {
     return [...this.providers.keys()];
   }
 
+  /** Provider metadata for UI login surfaces (never exposes secrets). */
+  list(): Array<{ id: string; displayName?: string; type: 'oidc' | 'mock' }> {
+    return [...this.providers.values()].map((provider) => ({
+      id: provider.id,
+      ...(provider.displayName ? { displayName: provider.displayName } : {}),
+      type: provider instanceof OidcIdentityProvider ? 'oidc' : 'mock'
+    }));
+  }
+
   /** Build a registry from validated identity configuration. */
   static fromConfig(config: IdentityConfig): IdentityRegistry {
     const result = validate('identity', config);

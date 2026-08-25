@@ -117,7 +117,7 @@ export class AgentRuntime {
     const output = tryParseJson(completion.content);
     const structured = (typeof output === 'object' && output !== null
       ? (output as Record<string, unknown>)
-      : {}) as { score?: number; confidence?: number; rubricSection?: string };
+      : {}) as { score?: number; confidence?: number; section?: string };
 
     this.audit.record({
       actor: { type: 'agent', id: agent.id, persona: persona?.id },
@@ -131,7 +131,7 @@ export class AgentRuntime {
       evidence,
       score: typeof structured.score === 'number' ? structured.score : undefined,
       confidence: typeof structured.confidence === 'number' ? structured.confidence : undefined,
-      rubricSection: typeof structured.rubricSection === 'string' ? structured.rubricSection : undefined,
+      section: typeof structured.section === 'string' ? structured.section : undefined,
       detail: { action: request.action }
     });
 

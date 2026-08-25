@@ -8,8 +8,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
-- Milestone 3.3 (Chroma VectorStore adapter, namespace isolation tests, retention/decay) — in progress
-- **Milestone 3.5 — interactive setup & doctor:** `flowforge setup` guides provider, Ollama model pulls, vector store and identity choices (interactive or `--non-interactive`); `flowforge doctor` prints a read-only environment checklist. Writes a secret-free `flowforge.config.json` (precedence: flags > env > repo config > user config > defaults) read automatically by `run`/`runs`/`audit`/`memory`; API keys go to a git-ignored `.env`.
+- **Phase 4 — Ecosystem**
+  - **Package export & signing (4.1):** new `@flowforge/packaging` package — deterministic STORE-method ZIP writer/reader, canonical JSON, SHA-256 file-hash manifests, Ed25519 signing (`flowforge keygen`). `flowforge pack` (directory → archive, optional `--signing-key`), `flowforge unpack`, `flowforge verify` (hash integrity + signature + engine compatibility). Archives build byte-identically from the same source.
+  - **Install-time verification (4.1.4):** `FlowForgeKernel.installWorkforceArchive` verifies integrity and signature before unpacking; tampered archives are refused, unsigned ones install with provenance flagged on the package summary.
+  - **Engine compatibility (4.1.5):** `engineVersion` semver-range field on `workforce.json`; refused at load when the running engine doesn't satisfy it.
+  - **Second domain package (4.2):** `fixtures/Corporate-Onboarding.workforce` — HR-Planner, Buddy, Compliance, Manager-Review agents and a human-approval onboarding workflow; validates and runs headlessly with zero platform changes.
+  - **Domain-language audit (4.2.2):** education-specific schema keys renamed schema-side to domain-neutral ones (`canSeeRubricAnswers` → `canSeeAnswers`, `canAccessLearnerHistory` → `canAccessHistory`, `rubricSection` → `section`).
+  - **Side-by-side isolation (4.2.3):** both packages run in one kernel with zero audit/memory cross-contamination.
+  - **Package author guide (4.2.4):** `docs/authoring-packages.md`.
+  - **Dapr runner (4.3):** `WorkflowRunner` interface + `EmbeddedWorkflowRunner` extracted; shared human-step authorization/application helpers; `runConformanceSuite` (one spec, two runners). New `@flowforge/dapr-runner` translates `workflow.schema.json` into Dapr workflows (agent nodes → activities, human nodes → `waitForExternalEvent`), with `DaprWorkflowRunner`, `registerDaprWorkflows`, `DaprStateStoreAdapter`; `docker/docker-compose.yml` + `docs/dapr-runner.md`.
+- **Phase 5 — UI layer**
+  - **Electron renderer (5.1):** multi-view app — Home (install/validate/branding/roster), Teacher portal (start/live run/input-approval/failure surfacing), Learner portal (role-filtered task inbox + audit "why?" links), Audit viewer (chronological, chain verify, filters, JSON export), Governance (providers, role mappings, per-user audit), OIDC login (5.1.7) and dev identity.
+  - **Visual workflow editor (5.2):** React Flow (`@xyflow/react`) — read-only diagram of any `workflow.schema.json`, live run overlay (current node, visited path), node/edge editing with a per-type property panel, continuous graph validation (start/dangling edges/branch defaults/reachability), and an in-editor dry run with the mock provider.
+  - **Kernel UI surface:** `getWorkflow`, `listIdentityProviders`, `signInWithTokens` / `beginOidcLogin` / `completeOidcLogin` (PKCE), `getGovernance`, package `branding` in summaries, identity-config support on `FlowForgeKernel`.
+
+### Changed
+- Agent permission keys and the audit `section` field are domain-neutral (Phase 4.2.2).
+- Workflow engine's role/binding authorization extracted into shared `authorizeHumanStep` / `applyHumanResponse` helpers reused by every runner.
+- **Documentation overhaul:** `docs/testing.md` rewritten from scratch (accurate commands, all 12 packages, test pyramid, runner conformance, env-guarded live tests); new end-user `docs/user-guide.md`; README reworked quickstart-first with a common-commands table and corrected status.
+- **`flowforge run` now actually persists runs** (and re-chains their audit records) via `KernelApi.importRun`, so `runs list` / `runs show` / `audit show` reflect headless CLI runs as advertised.
 
 ---
 

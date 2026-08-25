@@ -83,6 +83,32 @@ describe('core schema validation', () => {
     expect(validate('skill', { name: 'algebra', description: 'x', prompts: [] }).valid).toBe(false);
   });
 
+  it('accepts an engineVersion semver range on the manifest', () => {
+    const valid = validate('workforce-package', {
+      specVersion: '1.0',
+      id: 'dev.flowforge.test',
+      name: 'Test',
+      version: '1.0.0',
+      engineVersion: '>=0.1.0 <1.0.0',
+      agents: ['agents/planner/agent.json'],
+      workflows: ['w.json']
+    });
+    expect(valid.valid).toBe(true);
+
+    // JSON Schema checks shape only; semantic range checking (fail-closed) is
+    // the packaging package's checkEngineCompatibility, tested there.
+    const nonString = validate('workforce-package', {
+      specVersion: '1.0',
+      id: 'dev.flowforge.test',
+      name: 'Test',
+      version: '1.0.0',
+      engineVersion: 42,
+      agents: ['agents/planner/agent.json'],
+      workflows: ['w.json']
+    });
+    expect(nonString.valid).toBe(false);
+  });
+
   it('validates workflow node discriminators', () => {
     const wf = {
       id: 'main',
