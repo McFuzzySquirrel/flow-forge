@@ -17,6 +17,8 @@ const channels: typeof import('./ipc.js').IpcChannels = {
   loadPackage: 'flowforge:load-package',
   listPackages: 'flowforge:list-packages',
   removePackage: 'flowforge:remove-package',
+  selectPackage: 'flowforge:select-package',
+  installPackage: 'flowforge:install-package',
   installWorkflowArchive: 'flowforge:install-workflow-archive',
   getWorkflow: 'flowforge:get-workflow',
   startRun: 'flowforge:start-run',
@@ -37,6 +39,8 @@ const api = {
   loadPackage: (packageDir: string) => ipcRenderer.invoke(channels.loadPackage, packageDir),
   listPackages: () => ipcRenderer.invoke(channels.listPackages),
   removePackage: (packageId: string) => ipcRenderer.invoke(channels.removePackage, packageId),
+  selectPackagePath: () => ipcRenderer.invoke(channels.selectPackage),
+  installPackage: (packagePath: string) => ipcRenderer.invoke(channels.installPackage, packagePath),
   installWorkflowArchive: (archivePath: string) =>
     ipcRenderer.invoke(channels.installWorkflowArchive, archivePath),
   getWorkflow: (packageId: string, workflowId: string) =>

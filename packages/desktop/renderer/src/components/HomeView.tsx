@@ -100,20 +100,19 @@ export function HomeView({
     void onPackagesChanged().then(() => setLoaded(true));
   }, [onPackagesChanged]);
 
-  const install = async () => {
-    const trimmed = path.trim();
+  const install = async (targetPath: string) => {
+    const trimmed = targetPath.trim();
     if (!trimmed) return;
     setBusy(true);
     setError(undefined);
     setValidation(undefined);
     try {
-      if (trimmed.endsWith('.workforce')) {
-        await window.flowforge.installWorkflowArchive(trimmed);
-      } else {
-        const result = await window.flowforge.validatePackage(trimmed);
-        setValidation(result);
-        if (!result.valid) return;
-        await window.flowforge.loadPackage(trimmed);
+      // The main process classifies the path: package directory vs .workforce
+      // archive (a directory can legitimately end in `.workforce`).
+      const result = await window.flowforge.installPackage(trimmed);
+      if (!result.ok) {
+        setValidation(result.validation);
+        return;
       }
       setPath('');
       await onPackagesChanged();
@@ -121,6 +120,17 @@ export function HomeView({
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const browse = async () => {
+    try {
+      const selected = await window.flowforge.selectPackagePath();
+      if (!selected) return; // user cancelled
+      setPath(selected);
+      await install(selected);
+    } catch (err) {
+      setError(errorMessage(err));
     }
   };
 
@@ -155,10 +165,13 @@ export function HomeView({
               }}
               placeholder="/path/to/Grade7-Maths.workforce or /path/to/archive.workforce"
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void install();
+                if (event.key === 'Enter') void install(path);
               }}
             />
-            <button className="ff-btn primary" disabled={busy || !path.trim()} onClick={() => void install()}>
+            <button className="ff-btn" disabled={busy} onClick={() => void browse()}>
+              Browse…
+            </button>
+            <button className="ff-btn primary" disabled={busy || !path.trim()} onClick={() => void install(path)}>
               {busy ? 'Installing…' : 'Install / load'}
             </button>
           </div>

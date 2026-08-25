@@ -9,10 +9,12 @@
  * a loopback redirect, exchanges the code and signs the kernel in. Tokens
  * never cross the IPC bridge — the renderer only ever sees a UserSnapshot.
  */
+import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { DesktopKernel } from './kernel.js';
 import { IpcChannels, type HumanResponse } from './ipc.js';
 import { loadIdentityConfig } from './oidc.js';
@@ -79,6 +81,27 @@ export function registerIpcHandlers(kernel: DesktopKernel): void {
   ipcMain.handle(IpcChannels.loadPackage, (_event, packageDir: string) => kernel.loadPackage(packageDir));
   ipcMain.handle(IpcChannels.listPackages, () => kernel.listPackages());
   ipcMain.handle(IpcChannels.removePackage, (_event, packageId: string) => kernel.removePackage(packageId));
+  ipcMain.handle(IpcChannels.selectPackage, async () => {
+    const result = await dialog.showOpenDialog({
+      title: 'Select a workforce package',
+      properties: ['openDirectory', 'openFile'],
+      filters: [{ name: 'Workforce packages', extensions: ['workforce'] }]
+    });
+    return result.canceled ? undefined : result.filePaths[0];
+  });
+  ipcMain.handle(IpcChannels.installPackage, async (_event, packagePath: string) => {
+    const resolved = path.resolve(packagePath);
+    const stats = await stat(resolved);
+    if (stats.isDirectory()) {
+      // A directory may legitimately end in `.workforce` — validate and load
+      // it as a package directory.
+      const validation = kernel.validatePackage(resolved);
+      if (!validation.valid) return { ok: false, validation };
+      return { ok: true, summary: kernel.loadPackage(resolved) };
+    }
+    // A file is a `.workforce` archive: verify integrity/signature, unpack, load.
+    return { ok: true, summary: kernel.installWorkforceArchive(resolved) };
+  });
   ipcMain.handle(IpcChannels.installWorkflowArchive, (_event, archivePath: string) =>
     kernel.installWorkforceArchive(archivePath)
   );
@@ -128,7 +151,10 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   const identity = loadIdentityConfig();
-  registerIpcHandlers(new DesktopKernel({ dataDir: process.env.FLOWFORGE_DATA_DIR, ...(identity ? { identity } : {}) }));
+  // Persist installed packages, runs and the audit log under ~/.flowforge by
+  // default (override with FLOWFORGE_DATA_DIR).
+  const dataDir = process.env.FLOWFORGE_DATA_DIR ?? path.join(homedir(), '.flowforge');
+  registerIpcHandlers(new DesktopKernel({ dataDir, ...(identity ? { identity } : {}) }));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
