@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 - Milestone 3.3 (Chroma VectorStore adapter, namespace isolation tests, retention/decay) — in progress
+- **Milestone 3.5 — interactive setup & doctor:** `flowforge setup` guides provider, Ollama model pulls, vector store and identity choices (interactive or `--non-interactive`); `flowforge doctor` prints a read-only environment checklist. Writes a secret-free `flowforge.config.json` (precedence: flags > env > repo config > user config > defaults) read automatically by `run`/`runs`/`audit`/`memory`; API keys go to a git-ignored `.env`.
 
 ---
 

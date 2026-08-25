@@ -303,7 +303,7 @@ export DEEPSEEK_API_KEY=sk-...
 flowforge run fixtures/Grade7-Maths.workforce assignment
 ```
 
-> **Note:** the CLI selects providers via the `--provider ollama|deepseek|openai` flag and `--api-key` (or the `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` env vars). The `FLOWFORGE_*` environment-variable lookup shown above is a planned enhancement; see the Phase 3 / Phase 4 roadmap in `docs/PLAN.md`. For per-tier mappings or custom providers, instantiate providers directly in code or integration tests.
+> **Note:** the CLI selects providers via the `--provider ollama|deepseek|openai|hybrid` flag and `--api-key` (or the `DEEPSEEK_API_KEY` / `OPENAI_API_KEY` env vars). After running `flowforge setup`, the generated `flowforge.config.json` is read automatically — flags and env vars override it per run. For per-tier mappings or custom providers, instantiate providers directly in code or integration tests.
 
 ---
 
@@ -424,6 +424,11 @@ Without `--data-dir` the commands operate on a transient in-memory store (useful
 | `AZURE_OPENAI_API_KEY` | integration tests | — | Azure OpenAI API key |
 | `GROQ_API_KEY` | integration tests | — | Groq API key |
 | `CHROMA_URL` | integration tests | — | Chroma server URL; skips Chroma integration tests when unset |
+| `FLOWFORGE_PROVIDER` | CLI `resolveModelRegistry` | — | Default provider (`ollama`/`deepseek`/`openai`/`hybrid`) when no `--provider` flag or config entry is set |
+
+A `flowforge.config.json` (repo or `~/.flowforge/config.json`) read by the CLI supplies the same
+defaults; see `flowforge setup --help` (i.e. `flowforge setup` or `flowforge doctor`) and
+`packages/cli/src/config.ts`.
 
 ---
 
