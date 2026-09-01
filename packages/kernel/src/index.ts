@@ -60,7 +60,6 @@ import type {
   PackageSummary,
   PackageValidationResult,
   RunSnapshot,
-  SkillSummary,
   WorkflowSummary,
   TokenSetLike,
   UserSnapshot
@@ -209,6 +208,7 @@ export class FlowForgeKernel implements KernelApi {
   private readonly fallbackModelProvider: ModelProvider;
   private readonly messaging: MessagingTransport;
   private readonly configPath?: string;
+  private hasConfiguredModels: boolean;
   private modelConfig: FlowForgeConfig;
   private modelRegistry?: ModelRegistry;
 
@@ -227,6 +227,7 @@ export class FlowForgeKernel implements KernelApi {
     this.configPath = options.configPath;
     this.fallbackModelProvider =
       options.modelProvider ?? new MockModelProvider(() => JSON.stringify({ note: 'mock response' }));
+    this.hasConfiguredModels = options.modelConfig !== undefined || options.modelRegistry !== undefined;
     this.modelConfig = structuredClone(options.modelConfig ?? defaultConfig());
     this.modelRegistry = options.modelRegistry;
     this.messaging = options.messaging ?? new InMemoryMessagingTransport();
@@ -474,6 +475,7 @@ export class FlowForgeKernel implements KernelApi {
   }
 
   updateModelConfig(config: ModelConfigSnapshot): ModelConfigSnapshot {
+    this.hasConfiguredModels = true;
     this.modelConfig = { ...this.modelConfig, provider: structuredClone(config.provider) };
     if (this.configPath) saveConfig(this.modelConfig, this.configPath);
     try {
@@ -649,6 +651,12 @@ export class FlowForgeKernel implements KernelApi {
   }
 
   private buildModelRegistry(): ModelRegistry {
+    if (!this.hasConfiguredModels && !this.modelRegistry) {
+      return new ModelRegistry()
+        .set('small', this.fallbackModelProvider)
+        .set('medium', this.fallbackModelProvider)
+        .set('large', this.fallbackModelProvider);
+    }
     if (this.modelRegistry) return this.modelRegistry;
     try {
       this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
@@ -748,7 +756,6 @@ export type {
   HumanResponse,
   IdentityProviderSummary,
   KernelApi,
-  ModelConfigSnapshot,
   PackageSummary,
   PackageValidationResult,
   PendingTaskSnapshot,
@@ -774,6 +781,7 @@ export type {
   DeepPartial,
   FlowForgeConfig,
   HybridMapping,
+  ModelConfigSnapshot,
   OllamaProviderConfig,
   ProviderType,
   TierSpec

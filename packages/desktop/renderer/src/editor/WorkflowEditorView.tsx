@@ -125,18 +125,6 @@ export function WorkflowEditorView({
     return () => {
       cancelled = true;
     };
-
-    const handleAgentSkillsChange = async (skills: string[]) => {
-      if (!packageId || selectedNode?.type !== 'agent') return;
-      setLoadError(undefined);
-      try {
-        await window.flowforge.updateAgentSkills(packageId, selectedNode.agent, skills);
-        await onPackagesChanged();
-        setSaveMessage(`Updated skills for agent ${selectedNode.agent}.`);
-      } catch (err) {
-        setLoadError(errorMessage(err));
-      }
-    };
   }, [packageId, workflowId, applyWorkflow]);
 
   const onNodesChange = useCallback<OnNodesChange<FlowNode>>((changes) => {
@@ -226,6 +214,18 @@ export function WorkflowEditorView({
   const selectedNode = workflow?.nodes.find((node) => node.id === selectedNodeId);
   const selectedAgentSummary =
     selectedNode?.type === 'agent' ? activePackage?.agents.find((agent) => agent.id === selectedNode.agent) : undefined;
+
+  const handleAgentSkillsChange = async (skills: string[]) => {
+    if (!packageId || selectedNode?.type !== 'agent') return;
+    setLoadError(undefined);
+    try {
+      await window.flowforge.updateAgentSkills(packageId, selectedNode.agent, skills);
+      await onPackagesChanged();
+      setSaveMessage(`Updated skills for agent ${selectedNode.agent}.`);
+    } catch (err) {
+      setLoadError(errorMessage(err));
+    }
+  };
 
   const patchSelectedNode = useCallback(
     (patch: Partial<WorkflowNode>) => {

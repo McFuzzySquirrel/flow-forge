@@ -1,12 +1,19 @@
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { MockModelProvider } from '@flowforge/agents';
 import { DesktopKernel } from './kernel.js';
 
 const fixture = fileURLToPath(new URL('../../../fixtures/Grade7-Maths.workforce', import.meta.url));
 
+function makeKernel() {
+  return new DesktopKernel({
+    modelProvider: new MockModelProvider(() => JSON.stringify({ note: 'mock response' }))
+  });
+}
+
 describe('DesktopKernel', () => {
   it('validates a package and reports errors for a missing one', () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     expect(kernel.validatePackage(fixture)).toEqual({ valid: true, errors: [], graphErrors: [] });
     const invalid = kernel.validatePackage('/nonexistent/package');
     expect(invalid.valid).toBe(false);
@@ -14,7 +21,7 @@ describe('DesktopKernel', () => {
   });
 
   it('loads a package and returns a serializable summary', () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     const summary = kernel.loadPackage(fixture);
     expect(summary.id).toBeTruthy();
     expect(summary.agents.length).toBeGreaterThan(0);
@@ -25,7 +32,7 @@ describe('DesktopKernel', () => {
   });
 
   it('refuses to resume a run when nobody is signed in (ADR-0010)', async () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     const pkg = kernel.loadPackage(fixture);
     const run = await kernel.startRun(pkg.id, pkg.workflows[0]!.id);
     expect(run.status).toBe('waitingForHuman');
@@ -33,7 +40,7 @@ describe('DesktopKernel', () => {
   });
 
   it('signs in per role and enforces node roles on resume', async () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     const pkg = kernel.loadPackage(fixture);
     const workflow = pkg.workflows.find((candidate) => candidate.id === 'assignment') ?? pkg.workflows[0]!;
     let run = await kernel.startRun(pkg.id, workflow.id);
@@ -55,7 +62,7 @@ describe('DesktopKernel', () => {
   });
 
   it('drives the assignment workflow to completion and keeps the audit chain intact', async () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     const pkg = kernel.loadPackage(fixture);
     let run = await kernel.startRun(pkg.id, 'assignment');
     for (let step = 0; run.status === 'waitingForHuman' && run.pending && step < 20; step++) {
@@ -76,7 +83,7 @@ describe('DesktopKernel', () => {
   });
 
   it('signs out and forgets the current user', async () => {
-    const kernel = new DesktopKernel();
+    const kernel = makeKernel();
     const pkg = kernel.loadPackage(fixture);
     const role = pkg.workflows.flatMap((workflow) => workflow.roles)[0]!;
     await kernel.signIn(role);
