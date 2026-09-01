@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- **Desktop/runtime config parity (Phase 5 follow-through):**
+  - Desktop now reads the same secret-free provider/model config as the CLI, so configured Ollama/OpenAI/DeepSeek/hybrid routing applies to workflow runs launched from the Electron app.
+  - Runs and Audit views now surface the provider, model, and latest output preview captured for agent execution.
+  - Governance now includes model-routing controls and warning visibility for incomplete provider configuration.
+  - The visual workflow editor can now save workflow JSON back to disk and update referenced agents' `skills` lists.
+  - `@flowforge/kernel` now exposes a messaging abstraction boundary for future human↔human and human↔agent integrations.
 - **Phase 4 — Ecosystem**
   - **Package export & signing (4.1):** new `@flowforge/packaging` package — deterministic STORE-method ZIP writer/reader, canonical JSON, SHA-256 file-hash manifests, Ed25519 signing (`flowforge keygen`). `flowforge pack` (directory → archive, optional `--signing-key`), `flowforge unpack`, `flowforge verify` (hash integrity + signature + engine compatibility). Archives build byte-identically from the same source.
   - **Install-time verification (4.1.4):** `FlowForgeKernel.installWorkforceArchive` verifies integrity and signature before unpacking; tampered archives are refused, unsigned ones install with provenance flagged on the package summary.
@@ -23,6 +29,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - **Kernel UI surface:** `getWorkflow`, `listIdentityProviders`, `signInWithTokens` / `beginOidcLogin` / `completeOidcLogin` (PKCE), `getGovernance`, package `branding` in summaries, identity-config support on `FlowForgeKernel`.
 
 ### Changed
+- Identity configuration accepts `oauth` as an alias for discovery-backed OAuth/OIDC providers while keeping the OIDC-based identity model.
 - Agent permission keys and the audit `section` field are domain-neutral (Phase 4.2.2).
 - Workflow engine's role/binding authorization extracted into shared `authorizeHumanStep` / `applyHumanResponse` helpers reused by every runner.
 - **Documentation overhaul:** `docs/testing.md` rewritten from scratch (accurate commands, all 12 packages, test pyramid, runner conformance, env-guarded live tests); new end-user `docs/user-guide.md`; README reworked quickstart-first with a common-commands table and corrected status.

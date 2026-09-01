@@ -72,7 +72,8 @@ pnpm link --global ./packages/cli
 (Or `node packages/cli/dist/index.js …` always works.)
 
 **Prefer a UI?** `pnpm --filter @flowforge/desktop dev` opens the desktop app
-(home, portals, audit viewer, governance, visual workflow editor).
+(home, portals, audit viewer, governance with model controls, and a visual
+workflow editor with saveable workflow/skill edits).
 
 ---
 
@@ -87,6 +88,10 @@ pnpm link --global ./packages/cli
    checklist anytime.
 3. **Run** — commands read the config automatically; drop `--mock` to use your
    real provider. Precedence is flags > env > config.
+
+The desktop app now reads the same secret-free config and uses the configured
+provider mapping for workflow runs too, so Ollama/cloud model choices are
+consistent between CLI and UI.
 
 ## Common commands
 
@@ -138,7 +143,7 @@ packages/
   workflow/            @flowforge/workflow  — embedded engine + WorkflowRunner interface & conformance suite
   packaging/           @flowforge/packaging — deterministic .workforce archives, Ed25519 signing
   dapr-runner/         @flowforge/dapr-runner — Dapr Workflows implementation of WorkflowRunner
-  identity/            @flowforge/identity  — OIDC identity, claim-to-role mapping, sessions (ADR-0010)
+  identity/            @flowforge/identity  — OAuth/OIDC identity, claim-to-role mapping, sessions (ADR-0010)
   cli/                 @flowforge/cli       — flowforge validate | inspect | run | pack | verify | ...
   desktop/             @flowforge/desktop   — Electron + React desktop app (UI + visual workflow editor)
 fixtures/
@@ -152,7 +157,7 @@ fixtures/
 2. **Everything behind an interface** — `ModelProvider`, `VectorStore`, `StateStore`, `AuditSink` are swappable (local/offline vs cloud).
 3. **No hardcoded agents** — all behaviour comes from packages; the platform installs empty.
 4. **Audit is runtime-enforced** — an agent step cannot run without emitting an audit record.
-5. **All human actions are authenticated and role-checked** — workflow input and approvals require an OIDC-verified `Principal` whose deployment-mapped roles match the node's declared role ([ADR-0010](docs/adr/0010-oidc-identity-and-role-based-authorization.md)).
+5. **All human actions are authenticated and role-checked** — workflow input and approvals require a verified `Principal` from the configured OAuth/OIDC identity provider whose deployment-mapped roles match the node's declared role ([ADR-0010](docs/adr/0010-oidc-identity-and-role-based-authorization.md)).
 
 The reasoning behind these and other foundational decisions is captured as
 Architecture Decision Records in [docs/adr/](docs/adr/README.md).
@@ -161,7 +166,7 @@ Architecture Decision Records in [docs/adr/](docs/adr/README.md).
 
 ## Documentation
 
-- **[User guide](docs/user-guide.md)** — install, quickstart, everyday tasks, desktop app, worked scenarios
+- **[User guide](docs/user-guide.md)** — install, quickstart, desktop provider setup, workflow authoring, everyday tasks
 - **[Testing guide](docs/testing.md)** — the test suite and wiring real LLM providers
 - **[Package author guide](docs/authoring-packages.md)** — authoring your own `.workforce` packages
 - **[Dapr runner](docs/dapr-runner.md)** — running workflows on a hosted Dapr stack
@@ -175,4 +180,4 @@ Architecture Decision Records in [docs/adr/](docs/adr/README.md).
 - **Phase 2 — Headless completeness & kernel API hardening** ✅ `KernelApi`, file-backed persistence, full CLI *(revised per ADR-0011)*
 - **Phase 3 — Differentiators** ✅ personas, Coach/Reflection agents, memory write policy, graph validation, Chroma/File vector stores, namespace isolation
 - **Phase 4 — Ecosystem** ✅ `.workforce` packaging & signing, second-domain package, Dapr Workflows runner
-- **Phase 5 — UI layer(s)** ✅ desktop app (home, portals, audit, governance, visual editor), OIDC login *(mobile not pursued)*
+- **Phase 5 — UI layer(s)** ✅ desktop app (home, portals, audit with model/output visibility, governance model controls, visual editor with persistence), OAuth/OIDC login *(mobile not pursued)*

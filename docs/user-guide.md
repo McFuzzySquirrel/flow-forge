@@ -147,6 +147,9 @@ The `--mock` flag uses the offline mock. To use real models:
    Flags and environment variables override the config per run
    (`--provider ollama|deepseek|openai|hybrid`, `--api-key`, `--data-dir`).
 
+The desktop app uses the same secret-free config too, so once setup is complete
+your desktop runs use the same Ollama/cloud routing as the CLI.
+
 `flowforge doctor` prints a read-only health checklist (Node, pnpm, build,
 Ollama, Docker) and exits non-zero if something required is missing.
 
@@ -166,22 +169,50 @@ It opens a window with:
   or type a path to a `...workforce` directory or a `.workforce` archive), see
   its branding, agent roster and workflows.
 - **Runs** — start a workflow from any installed package, watch live progress,
-  answer human-input and human-approval steps, and see failure cards.
+  answer human-input and human-approval steps, see failure cards, and inspect
+  the provider, model, and latest output preview for each agent step.
 - **Per-role portals** — one portal per human role in the installed packages
   (Teacher, Student, HR, Employee, Compliance Officer, Manager — whatever the
   package declares). Each shows that role's task inbox and feedback with
   "why?" links straight into the audit record for every mark. Swap the package
   and the portal list changes with it.
-- **Audit viewer** — chronological records, a chain-verify button, filters and
-  JSON export.
-- **Governance** — identity providers, role mappings and a per-user audit table.
+- **Audit viewer** — chronological records, a chain-verify button, filters,
+  JSON export, and model/output visibility per agent step.
+- **Governance** — identity providers, role mappings, model-provider routing,
+  config warnings, and a per-user audit table.
 - **Workflow editor** — open any workflow as a graph, watch a live run light it
-  up, edit nodes, and dry-run the result without leaving the editor.
+  up, edit nodes, manage an agent's assigned skills, save workflow changes back
+  to the installed package, and dry-run the result without leaving the editor.
 
 Sign in either with the built-in **dev identity** (one button per workflow role,
-e.g. "Sign in as teacher") or with a real **OIDC provider** (configured via
-`~/.flowforge/identity.json` or `$FLOWFORGE_IDENTITY_CONFIG`) using
-authorization-code + PKCE — the browser opens, you approve, and the app resumes.
+e.g. "Sign in as teacher") or with a real **OAuth/OIDC provider** (configured
+via `~/.flowforge/identity.json` or `$FLOWFORGE_IDENTITY_CONFIG`) using
+authorization-code + PKCE — the browser opens, you approve, and the app
+resumes.
+
+### Desktop model configuration
+
+After running `flowforge setup`, open **Governance** in the desktop app to
+review or change the active provider routing:
+
+- choose `ollama`, `deepseek`, `openai`, or `hybrid`
+- edit the secret-free URL/model settings written into `flowforge.config.json`
+- keep API keys in the environment or `~/.flowforge/.env`
+- review any warning shown when a cloud provider is selected without the needed
+  API key; in that case FlowForge falls back to the mock provider until the
+  configuration is usable
+
+### Saving workflow and agent-skill changes
+
+The workflow editor now supports two kinds of authoring changes against an
+installed package:
+
+- **Save workflow** writes the edited workflow JSON back to the package on disk
+- **Agent skills** in the property panel updates the referenced agent's
+  `skills` list in its `agent.json`
+
+This makes the editor suitable for lightweight package maintenance, not just
+visual inspection.
 
 > The desktop app opens an Electron window, so it needs a graphical session.
 > The CLI works headless anywhere.
@@ -238,6 +269,7 @@ changes.
 |---|---|
 | `~/.flowforge/` | Default data directory: `config.json`, `packages.json` (installed packages), `runs/*.json` (run state), `audit.jsonl` (hash-chained audit log), `memory/` (file-backed vector store) |
 | `~/.flowforge/.env` | Secrets (cloud API keys) — git-ignored, never written into config |
+| `~/.flowforge/identity.json` | Optional desktop identity-provider configuration for OAuth/OIDC login |
 | `flowforge.config.json` | Config; precedence is **flags > env > repo config > user config > defaults** |
 
 You can point everything at a different directory per run with `--data-dir`.

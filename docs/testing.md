@@ -10,9 +10,9 @@ built-in mocks.
 ## Quick start
 
 ```bash
-pnpm install
-pnpm build   # compile the workspace first — tests import the compiled packages
-pnpm test    # run the full suite (offline, mock models only)
+corepack pnpm install
+corepack pnpm -r build   # compile the workspace first — tests import the compiled packages
+corepack pnpm test       # run the full suite (offline, mock models only)
 ```
 
 The full suite is **fast, deterministic and offline** — every model call goes
@@ -78,12 +78,12 @@ Notes:
 | `@flowforge/memory` | `src/index.test.ts` | Shared `VectorStore` contract suite (in-memory + file), namespace isolation, `MemoryService` recall/forget/list, retention/decay (`maxItems`, `maxAgeMs`) |
 | `@flowforge/audit` | `src/index.test.ts` | Hash-chain construction, verification, tamper detection, schema-valid records |
 | `@flowforge/workflow` | `src/index.test.ts`, `src/conformance.test.ts` | End-to-end assignment lifecycle, rejection/resubmit loop, role enforcement + participant binding (ADR-0010), retries/fail, persona override, `evaluateCondition`, `validateGraph`, the embedded runner passing the conformance suite |
-| `@flowforge/identity` | `src/index.test.ts` | `RoleMapper`, `PermissionPolicy`, `IdentityRegistry`, `IdentityService` login/refresh/logout + audited denials, session TTL |
-| `@flowforge/kernel` | `src/index.test.ts`, `src/isolation.test.ts` | `FlowForgeKernel` in-memory + file-backed persistence, package install from signed/unsigned/tampered `.workforce` archives, `engineVersion` rejection, OIDC token sign-in, the full assignment walkthrough, and **two packages side-by-side with zero cross-contamination** |
+| `@flowforge/identity` | `src/index.test.ts` | `RoleMapper`, `PermissionPolicy`, `IdentityRegistry`, `IdentityService` login/refresh/logout + audited denials, session TTL, and the OAuth config alias for discovery-backed providers |
+| `@flowforge/kernel` | `src/index.test.ts`, `src/isolation.test.ts` | `FlowForgeKernel` in-memory + file-backed persistence, package install from signed/unsigned/tampered `.workforce` archives, `engineVersion` rejection, OAuth/OIDC token sign-in, workflow save + agent-skill persistence, model-config updates, kernel messaging, the full assignment walkthrough, and **two packages side-by-side with zero cross-contamination** |
 | `@flowforge/packaging` | `src/index.test.ts` | Deterministic ZIP writer/reader, canonical JSON, Ed25519 signing, pack/unpack round-trips, `verifyWorkforceArchive` (hashes, signature, engine compat), path-traversal guard |
 | `@flowforge/dapr-runner` | `src/index.test.ts` | The Dapr runner passing the **same conformance suite** as the embedded engine via an in-process Dapr executor; authorization on resume; `DaprStateStoreAdapter` round-trips |
 | `@flowforge/cli` | `src/config.test.ts`, `src/setup.test.ts`, `src/pack.test.ts` | Config precedence + secrets handling, interactive/non-interactive setup, `pack`/`unpack`/`verify` command behavior |
-| `@flowforge/desktop` | `src/kernel.test.ts` | IPC bridge smoke test over the kernel |
+| `@flowforge/desktop` | `src/kernel.test.ts` | Desktop-kernel smoke coverage over the kernel/provider wiring with deterministic mock models |
 
 ---
 
