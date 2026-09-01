@@ -52,15 +52,14 @@ describe('doctor checks', () => {
   });
 
   it('returns a full report from doctorChecks', async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = vi.fn<typeof fetch>().mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')));
     try {
       const checks = await doctorChecks({ cwd: process.cwd() });
       const names = checks.map((c) => c.name);
       expect(names).toEqual(['node', 'pnpm', 'dependencies', 'build', 'ollama', 'docker']);
       for (const check of checks) expect(['ok', 'warn', 'fail']).toContain(check.status);
     } finally {
-      globalThis.fetch = originalFetch;
+      vi.unstubAllGlobals();
     }
   });
 });
