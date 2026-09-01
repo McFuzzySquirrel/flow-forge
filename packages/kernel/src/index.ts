@@ -479,8 +479,8 @@ export class FlowForgeKernel implements KernelApi {
   updateModelConfig(config: ModelConfigSnapshot): ModelConfigSnapshot {
     this.hasConfiguredModels = true;
     this.modelConfig = { ...this.modelConfig, provider: structuredClone(config.provider) };
-    if (this.configPath) saveConfig(this.modelConfig, this.configPath);
     try {
+      if (this.configPath) saveConfig(this.modelConfig, this.configPath);
       this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
       this.modelConfigWarning = undefined;
     } catch (error) {

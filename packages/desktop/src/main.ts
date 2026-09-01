@@ -19,7 +19,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { DesktopKernel } from './kernel.js';
 import { IpcChannels, type HumanResponse } from './ipc.js';
 import { loadIdentityConfig } from './oidc.js';
-import { loadConfig, userConfigPath } from '@flowforge/kernel';
+import { loadConfig, repoConfigPath, userConfigPath } from '@flowforge/kernel';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -169,8 +169,18 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   const identity = loadIdentityConfig();
-  const configPath = process.env.FLOWFORGE_CONFIG ?? userConfigPath();
-  const config = loadConfig(existsSync(configPath) ? configPath : undefined);
+  const envConfigPath = process.env.FLOWFORGE_CONFIG;
+  const repoPath = repoConfigPath();
+  const userPath = userConfigPath();
+  const resolvedConfigPath = envConfigPath && existsSync(envConfigPath)
+    ? envConfigPath
+    : existsSync(repoPath)
+      ? repoPath
+      : existsSync(userPath)
+        ? userPath
+        : undefined;
+  const config = loadConfig(resolvedConfigPath);
+  const configPath = resolvedConfigPath;
   // Persist installed packages, runs and the audit log under ~/.flowforge by
   // default (override with FLOWFORGE_DATA_DIR).
   const dataDir = process.env.FLOWFORGE_DATA_DIR ?? path.join(homedir(), '.flowforge');

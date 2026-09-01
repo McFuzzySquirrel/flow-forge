@@ -84,6 +84,9 @@ export function PropertyPanel({
   const [idDraft, setIdDraft] = useState(node.id);
   useEffect(() => setIdDraft(node.id), [node.id]);
 
+  const [skillsDraft, setSkillsDraft] = useState<string[]>(agentSkills);
+  useEffect(() => setSkillsDraft(agentSkills), [agentSkills]);
+
   const trimmed = idDraft.trim();
   const idConflict = workflow.nodes.some((candidate) => candidate.id === trimmed && candidate.id !== node.id);
 
@@ -168,7 +171,7 @@ export function PropertyPanel({
             <div style={{ display: 'grid', gap: 6 }}>
               {availableSkills.length === 0 && <span className="ff-muted">No package skills available.</span>}
               {availableSkills.map((skill) => {
-                const checked = agentSkills.includes(skill.id);
+                const checked = skillsDraft.includes(skill.id);
                 return (
                   <label key={skill.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                     <input
@@ -176,11 +179,11 @@ export function PropertyPanel({
                       checked={checked}
                       onChange={(event) => {
                         if (!onAgentSkillsChange) return;
-                        onAgentSkillsChange(
-                          event.target.checked
-                            ? [...agentSkills, skill.id]
-                            : agentSkills.filter((current) => current !== skill.id)
-                        );
+                        const next = event.target.checked
+                          ? [...skillsDraft, skill.id]
+                          : skillsDraft.filter((current) => current !== skill.id);
+                        setSkillsDraft(next);
+                        onAgentSkillsChange(next);
                       }}
                     />
                     <span>
