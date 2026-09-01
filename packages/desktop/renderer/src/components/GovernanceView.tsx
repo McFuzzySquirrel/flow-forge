@@ -14,12 +14,14 @@ export function GovernanceView({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([window.flowforge.getGovernance(), window.flowforge.getModelConfig()])
-      .then(([nextGov, nextConfig]) => {
-        setGov(nextGov);
-        setModelConfig(nextConfig);
-      })
+    window.flowforge
+      .getGovernance()
+      .then(setGov)
       .catch((err) => setError(errorMessage(err)));
+    window.flowforge
+      .getModelConfig()
+      .then(setModelConfig)
+      .catch((err) => setModelError(errorMessage(err)));
   }, []);
 
   const permissions = Object.entries(gov?.permissions ?? {});
@@ -56,160 +58,168 @@ export function GovernanceView({
       <p className="ff-page-sub">Identity providers, role mappings, permissions, model routing, session policy and per-user audit.</p>
 
       <ErrorInline error={error} />
+      {!modelConfig && <ErrorInline error={modelError} />}
       {!gov && !error && <Loading />}
 
-      {gov && modelConfig && (
-        <>
-          <section className="ff-section">
-            <h3>Model providers</h3>
-            <div className="ff-card">
-              <div className="ff-card-body">
-                <p className="ff-muted" style={{ marginTop: 0 }}>
-                  Configure provider routing here. API keys remain in environment variables or .env files.
-                </p>
-                <div className="ff-form-row">
-                  <label>Provider</label>
-                  <select
-                    className="ff-select"
-                    value={providerType}
-                    onChange={(event) => setProvider({ type: event.target.value as ModelConfigSnapshot['provider']['type'] })}
-                  >
-                    <option value="ollama">Ollama</option>
-                    <option value="deepseek">DeepSeek</option>
-                    <option value="openai">OpenAI-compatible</option>
-                    <option value="hybrid">Hybrid</option>
-                  </select>
-                </div>
-                <div className="ff-form-row">
-                  <label>Config file</label>
-                  <span className="ff-monospace">{modelConfig.configPath ?? 'In-memory only'}</span>
-                </div>
-                {(providerType === 'ollama' || providerType === 'hybrid') && (
-                  <>
-                    <div className="ff-form-row">
-                      <label>Ollama URL</label>
-                      <input
-                        className="ff-input"
-                        value={modelConfig.provider.ollama?.url ?? ''}
-                        onChange={(event) =>
-                          setProvider({
-                            ollama: {
-                              url: event.target.value,
-                              model: modelConfig.provider.ollama?.model ?? 'llama3.2',
-                              embeddingModel: modelConfig.provider.ollama?.embeddingModel ?? 'nomic-embed-text'
-                            }
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="ff-form-row">
-                      <label>Default Ollama model</label>
-                      <input
-                        className="ff-input"
-                        value={modelConfig.provider.ollama?.model ?? ''}
-                        onChange={(event) =>
-                          setProvider({
-                            ollama: {
-                              url: modelConfig.provider.ollama?.url ?? 'http://localhost:11434',
-                              model: event.target.value,
-                              embeddingModel: modelConfig.provider.ollama?.embeddingModel ?? 'nomic-embed-text'
-                            }
-                          })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-                {(providerType === 'deepseek' || providerType === 'openai' || providerType === 'hybrid') && (
-                  <>
-                    <div className="ff-form-row">
-                      <label>Cloud base URL</label>
-                      <input
-                        className="ff-input"
-                        value={modelConfig.provider.cloud?.baseUrl ?? ''}
-                        onChange={(event) =>
-                          setProvider({
-                            cloud: {
-                              baseUrl: event.target.value,
-                              model: modelConfig.provider.cloud?.model ?? 'gpt-4o-mini'
-                            }
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="ff-form-row">
-                      <label>Cloud model</label>
-                      <input
-                        className="ff-input"
-                        value={modelConfig.provider.cloud?.model ?? ''}
-                        onChange={(event) =>
-                          setProvider({
-                            cloud: {
-                              baseUrl: modelConfig.provider.cloud?.baseUrl ?? 'https://api.openai.com/v1',
-                              model: event.target.value
-                            }
-                          })
-                        }
-                      />
-                    </div>
-                  </>
-                )}
-                {providerType === 'hybrid' && (
-                  <>
-                    {(['small', 'medium', 'large'] as const).map((tier) => (
-                      <div key={tier} className="ff-form-row">
-                        <label>{tier} tier</label>
-                        <select
-                          className="ff-select"
-                          value={modelConfig.provider.hybrid?.[tier]?.type ?? 'ollama'}
-                          onChange={(event) =>
-                            setProvider({
-                              hybrid: {
-                                small: modelConfig.provider.hybrid?.small ?? { type: 'ollama', model: 'qwen2.5:3b' },
-                                medium: modelConfig.provider.hybrid?.medium ?? { type: 'ollama', model: 'llama3.2' },
-                                large: modelConfig.provider.hybrid?.large ?? { type: 'cloud', model: 'gpt-4o' },
-                                [tier]: {
-                                  type: event.target.value as 'ollama' | 'cloud',
-                                  model: modelConfig.provider.hybrid?.[tier]?.model ?? ''
-                                }
-                              }
-                            })
-                          }
-                        >
-                          <option value="ollama">Ollama</option>
-                          <option value="cloud">Cloud</option>
-                        </select>
-                        <input
-                          className="ff-input"
-                          value={modelConfig.provider.hybrid?.[tier]?.model ?? ''}
-                          onChange={(event) =>
-                            setProvider({
-                              hybrid: {
-                                small: modelConfig.provider.hybrid?.small ?? { type: 'ollama', model: 'qwen2.5:3b' },
-                                medium: modelConfig.provider.hybrid?.medium ?? { type: 'ollama', model: 'llama3.2' },
-                                large: modelConfig.provider.hybrid?.large ?? { type: 'cloud', model: 'gpt-4o' },
-                                [tier]: {
-                                  type: modelConfig.provider.hybrid?.[tier]?.type ?? 'ollama',
-                                  model: event.target.value
-                                }
-                              }
-                            })
-                          }
-                        />
-                      </div>
-                    ))}
-                  </>
-                )}
-                <div className="ff-btn-row">
-                  <button className="ff-btn primary" disabled={saving} onClick={() => void saveModelConfig()}>
-                    Save model config
-                  </button>
-                </div>
-                <ErrorInline error={modelError} />
+      {modelConfig && (
+        <section className="ff-section">
+          <h3>Model providers</h3>
+          <div className="ff-card">
+            <div className="ff-card-body">
+              <p className="ff-muted" style={{ marginTop: 0 }}>
+                Configure provider routing here. API keys remain in environment variables or .env files.
+              </p>
+              <div className="ff-form-row">
+                <label>Provider</label>
+                <select
+                  className="ff-select"
+                  value={providerType}
+                  onChange={(event) => setProvider({ type: event.target.value as ModelConfigSnapshot['provider']['type'] })}
+                >
+                  <option value="ollama">Ollama</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="openai">OpenAI-compatible</option>
+                  <option value="hybrid">Hybrid</option>
+                </select>
               </div>
+              <div className="ff-form-row">
+                <label>Config file</label>
+                <span className="ff-monospace">{modelConfig.configPath ?? 'In-memory only'}</span>
+              </div>
+              {modelConfig.warning && (
+                <div className="ff-error-card" style={{ marginBottom: 12 }}>
+                  {modelConfig.warning}
+                </div>
+              )}
+              {(providerType === 'ollama' || providerType === 'hybrid') && (
+                <>
+                  <div className="ff-form-row">
+                    <label>Ollama URL</label>
+                    <input
+                      className="ff-input"
+                      value={modelConfig.provider.ollama?.url ?? ''}
+                      onChange={(event) =>
+                        setProvider({
+                          ollama: {
+                            url: event.target.value,
+                            model: modelConfig.provider.ollama?.model ?? 'llama3.2',
+                            embeddingModel: modelConfig.provider.ollama?.embeddingModel ?? 'nomic-embed-text'
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="ff-form-row">
+                    <label>Default Ollama model</label>
+                    <input
+                      className="ff-input"
+                      value={modelConfig.provider.ollama?.model ?? ''}
+                      onChange={(event) =>
+                        setProvider({
+                          ollama: {
+                            url: modelConfig.provider.ollama?.url ?? 'http://localhost:11434',
+                            model: event.target.value,
+                            embeddingModel: modelConfig.provider.ollama?.embeddingModel ?? 'nomic-embed-text'
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+              {(providerType === 'deepseek' || providerType === 'openai' || providerType === 'hybrid') && (
+                <>
+                  <div className="ff-form-row">
+                    <label>Cloud base URL</label>
+                    <input
+                      className="ff-input"
+                      value={modelConfig.provider.cloud?.baseUrl ?? ''}
+                      onChange={(event) =>
+                        setProvider({
+                          cloud: {
+                            baseUrl: event.target.value,
+                            model: modelConfig.provider.cloud?.model ?? 'gpt-4o-mini'
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="ff-form-row">
+                    <label>Cloud model</label>
+                    <input
+                      className="ff-input"
+                      value={modelConfig.provider.cloud?.model ?? ''}
+                      onChange={(event) =>
+                        setProvider({
+                          cloud: {
+                            baseUrl: modelConfig.provider.cloud?.baseUrl ?? 'https://api.openai.com/v1',
+                            model: event.target.value
+                          }
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
+              {providerType === 'hybrid' && (
+                <>
+                  {(['small', 'medium', 'large'] as const).map((tier) => (
+                    <div key={tier} className="ff-form-row">
+                    <label>{tier[0]!.toUpperCase() + tier.slice(1)} tier</label>
+                      <select
+                        className="ff-select"
+                        value={modelConfig.provider.hybrid?.[tier]?.type ?? 'ollama'}
+                        onChange={(event) =>
+                          setProvider({
+                            hybrid: {
+                              small: modelConfig.provider.hybrid?.small ?? { type: 'ollama', model: 'qwen2.5:3b' },
+                              medium: modelConfig.provider.hybrid?.medium ?? { type: 'ollama', model: 'llama3.2' },
+                              large: modelConfig.provider.hybrid?.large ?? { type: 'cloud', model: 'gpt-4o' },
+                              [tier]: {
+                                type: event.target.value as 'ollama' | 'cloud',
+                                model: modelConfig.provider.hybrid?.[tier]?.model ?? ''
+                              }
+                            }
+                          })
+                        }
+                      >
+                        <option value="ollama">Ollama</option>
+                        <option value="cloud">Cloud</option>
+                      </select>
+                      <input
+                        className="ff-input"
+                        value={modelConfig.provider.hybrid?.[tier]?.model ?? ''}
+                        onChange={(event) =>
+                          setProvider({
+                            hybrid: {
+                              small: modelConfig.provider.hybrid?.small ?? { type: 'ollama', model: 'qwen2.5:3b' },
+                              medium: modelConfig.provider.hybrid?.medium ?? { type: 'ollama', model: 'llama3.2' },
+                              large: modelConfig.provider.hybrid?.large ?? { type: 'cloud', model: 'gpt-4o' },
+                              [tier]: {
+                                type: modelConfig.provider.hybrid?.[tier]?.type ?? 'ollama',
+                                model: event.target.value
+                              }
+                            }
+                          })
+                        }
+                      />
+                    </div>
+                  ))}
+                </>
+              )}
+              <div className="ff-btn-row">
+                <button className="ff-btn primary" disabled={saving} onClick={() => void saveModelConfig()}>
+                  Save model config
+                </button>
+              </div>
+              <ErrorInline error={modelError} />
             </div>
-          </section>
+          </div>
+        </section>
+      )}
 
+      {gov && (
+        <>
           <section className="ff-section">
             <h3>Identity providers</h3>
             <div className="ff-card">

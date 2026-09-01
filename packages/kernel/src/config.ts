@@ -47,6 +47,7 @@ export interface FlowForgeConfig {
 export interface ModelConfigSnapshot {
   configPath?: string;
   provider: FlowForgeConfig['provider'];
+  warning?: string;
 }
 
 export type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] };
@@ -159,18 +160,21 @@ function resolveProvider(
   config: FlowForgeConfig,
   env: NodeJS.ProcessEnv
 ): ModelProvider {
-  const key = apiKey ?? env.DEEPSEEK_API_KEY ?? env.OPENAI_API_KEY;
   switch (providerName) {
-    case 'deepseek':
+    case 'deepseek': {
+      const key = apiKey ?? env.DEEPSEEK_API_KEY;
       if (!key) throw new Error('DeepSeek requires an API key (--api-key or DEEPSEEK_API_KEY)');
       return new DeepSeekProvider(key, config.provider.cloud?.model ?? 'deepseek-chat');
-    case 'openai':
+    }
+    case 'openai': {
+      const key = apiKey ?? env.OPENAI_API_KEY;
       if (!key) throw new Error('OpenAI requires an API key (--api-key or OPENAI_API_KEY)');
       return new OpenAICompatibleProvider(
         config.provider.cloud?.baseUrl ?? 'https://api.openai.com/v1',
         key,
         config.provider.cloud?.model ?? 'gpt-4o-mini'
       );
+    }
     case undefined:
     case 'ollama':
       return new OllamaProvider(

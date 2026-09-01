@@ -210,6 +210,7 @@ export class FlowForgeKernel implements KernelApi {
   private readonly configPath?: string;
   private hasConfiguredModels: boolean;
   private modelConfig: FlowForgeConfig;
+  private modelConfigWarning?: string;
   private modelRegistry?: ModelRegistry;
 
   /** Loaded packages, keyed by package id. */
@@ -470,7 +471,8 @@ export class FlowForgeKernel implements KernelApi {
   getModelConfig(): ModelConfigSnapshot {
     return {
       ...(this.configPath ? { configPath: this.configPath } : {}),
-      provider: structuredClone(this.modelConfig.provider)
+      provider: structuredClone(this.modelConfig.provider),
+      ...(this.modelConfigWarning ? { warning: this.modelConfigWarning } : {})
     };
   }
 
@@ -480,8 +482,10 @@ export class FlowForgeKernel implements KernelApi {
     if (this.configPath) saveConfig(this.modelConfig, this.configPath);
     try {
       this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
-    } catch {
+      this.modelConfigWarning = undefined;
+    } catch (error) {
       this.modelRegistry = undefined;
+      this.modelConfigWarning = error instanceof Error ? error.message : String(error);
     }
     this.reloadLoadedPackages();
     return this.getModelConfig();
@@ -590,7 +594,6 @@ export class FlowForgeKernel implements KernelApi {
     const principal = this.currentPrincipal();
     if (!principal) throw new Error('Sign in before sending a message');
     const created = await this.messaging.sendMessage({
-      id: '',
       createdAt: new Date().toISOString(),
       sender: {
         type: 'human',
@@ -652,21 +655,25 @@ export class FlowForgeKernel implements KernelApi {
 
   private buildModelRegistry(): ModelRegistry {
     if (!this.hasConfiguredModels && !this.modelRegistry) {
-      return new ModelRegistry()
-        .set('small', this.fallbackModelProvider)
-        .set('medium', this.fallbackModelProvider)
-        .set('large', this.fallbackModelProvider);
+      this.modelConfigWarning = undefined;
+      return this.fallbackRegistry();
     }
     if (this.modelRegistry) return this.modelRegistry;
     try {
       this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
+      this.modelConfigWarning = undefined;
       return this.modelRegistry;
-    } catch {
-      return new ModelRegistry()
-        .set('small', this.fallbackModelProvider)
-        .set('medium', this.fallbackModelProvider)
-        .set('large', this.fallbackModelProvider);
+    } catch (error) {
+      this.modelConfigWarning = error instanceof Error ? error.message : String(error);
+      return this.fallbackRegistry();
     }
+  }
+
+  private fallbackRegistry(): ModelRegistry {
+    return new ModelRegistry()
+      .set('small', this.fallbackModelProvider)
+      .set('medium', this.fallbackModelProvider)
+      .set('large', this.fallbackModelProvider);
   }
 
   private reloadLoadedPackages(): void {

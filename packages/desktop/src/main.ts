@@ -10,6 +10,7 @@
  * never cross the IPC bridge — the renderer only ever sees a UserSnapshot.
  */
 import { stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { homedir } from 'node:os';
 import path from 'node:path';
@@ -169,7 +170,7 @@ function createWindow(): void {
 void app.whenReady().then(() => {
   const identity = loadIdentityConfig();
   const configPath = process.env.FLOWFORGE_CONFIG ?? userConfigPath();
-  const config = loadConfig(process.env.FLOWFORGE_CONFIG);
+  const config = loadConfig(existsSync(configPath) ? configPath : undefined);
   // Persist installed packages, runs and the audit log under ~/.flowforge by
   // default (override with FLOWFORGE_DATA_DIR).
   const dataDir = process.env.FLOWFORGE_DATA_DIR ?? path.join(homedir(), '.flowforge');

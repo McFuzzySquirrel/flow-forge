@@ -56,6 +56,7 @@ export type {
 } from '@flowforge/kernel';
 
 import type {
+  AgentSummary,
   AuditTrailSnapshot,
   GovernanceSummary,
   HumanResponse,
@@ -67,7 +68,8 @@ import type {
   PackageValidationResult,
   RunSnapshot,
   SendMessageInput,
-  UserSnapshot
+  UserSnapshot,
+  WorkflowSummary
 } from '@flowforge/kernel';
 import type { WorkflowDefinition } from '@flowforge/core';
 
@@ -104,8 +106,8 @@ export interface FlowForgeApi {
   // ---- Workflows (read-only graph access for the editor) -------------------
 
   getWorkflow(packageId: string, workflowId: string): Promise<WorkflowDefinition>;
-  saveWorkflow(packageId: string, workflow: WorkflowDefinition): Promise<void>;
-  updateAgentSkills(packageId: string, agentId: string, skills: string[]): Promise<void>;
+  saveWorkflow(packageId: string, workflow: WorkflowDefinition): Promise<WorkflowSummary>;
+  updateAgentSkills(packageId: string, agentId: string, skills: string[]): Promise<AgentSummary>;
 
   // ---- Runs ----------------------------------------------------------------
 

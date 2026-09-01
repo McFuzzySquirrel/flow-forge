@@ -6,7 +6,7 @@ export interface MessageRecipient {
 }
 
 export interface MessageRecord {
-  id: string;
+  id?: string;
   createdAt: string;
   sender: {
     type: 'human' | 'agent' | 'system';
@@ -53,7 +53,7 @@ export class InMemoryMessagingTransport implements MessagingTransport {
   }
 
   async sendMessage(message: MessageRecord): Promise<MessageRecord> {
-    const stored = { ...message, id: message.id || randomUUID() };
+    const stored = { ...message, id: message.id ?? randomUUID() };
     this.messages.push(stored);
     return stored;
   }
