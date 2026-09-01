@@ -133,7 +133,7 @@ export function App() {
         {view.kind === 'audit' && <AuditView initialRunId={auditFilter.runId} initialActor={auditFilter.actor} />}
         {view.kind === 'governance' && <GovernanceView openAudit={openAudit} />}
         {view.kind === 'identity' && <IdentityView packages={packages} user={user} onUserChanged={refreshUser} />}
-        {view.kind === 'editor' && <WorkflowEditorView packages={packages} />}
+        {view.kind === 'editor' && <WorkflowEditorView packages={packages} onPackagesChanged={refreshPackages} />}
       </main>
     </div>
   );

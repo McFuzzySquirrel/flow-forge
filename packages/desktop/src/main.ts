@@ -18,6 +18,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { DesktopKernel } from './kernel.js';
 import { IpcChannels, type HumanResponse } from './ipc.js';
 import { loadIdentityConfig } from './oidc.js';
+import { loadConfig, userConfigPath } from '@flowforge/kernel';
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -108,6 +109,12 @@ export function registerIpcHandlers(kernel: DesktopKernel): void {
   ipcMain.handle(IpcChannels.getWorkflow, (_event, packageId: string, workflowId: string) =>
     kernel.getWorkflow(packageId, workflowId)
   );
+  ipcMain.handle(IpcChannels.saveWorkflow, (_event, packageId: string, workflow: import('@flowforge/core').WorkflowDefinition) =>
+    kernel.saveWorkflow(packageId, workflow)
+  );
+  ipcMain.handle(IpcChannels.updateAgentSkills, (_event, packageId: string, agentId: string, skills: string[]) =>
+    kernel.updateAgentSkills(packageId, agentId, skills)
+  );
   ipcMain.handle(IpcChannels.startRun, (_event, packageId: string, workflowId: string) =>
     kernel.startRun(packageId, workflowId)
   );
@@ -118,6 +125,16 @@ export function registerIpcHandlers(kernel: DesktopKernel): void {
   ipcMain.handle(IpcChannels.getRun, (_event, runId: string) => kernel.getRun(runId));
   ipcMain.handle(IpcChannels.getAuditTrail, (_event, runId?: string) =>
     kernel.getAuditTrail(runId ? { runId } : undefined)
+  );
+  ipcMain.handle(IpcChannels.getModelConfig, () => kernel.getModelConfig());
+  ipcMain.handle(IpcChannels.updateModelConfig, (_event, config: import('./ipc.js').ModelConfigSnapshot) =>
+    kernel.updateModelConfig(config)
+  );
+  ipcMain.handle(IpcChannels.listMessages, (_event, filter?: import('./ipc.js').MessageFilter) =>
+    kernel.listMessages(filter)
+  );
+  ipcMain.handle(IpcChannels.sendMessage, (_event, message: import('./ipc.js').SendMessageInput) =>
+    kernel.sendMessage(message)
   );
   ipcMain.handle(IpcChannels.signIn, (_event, role: string) => kernel.signIn(role));
   ipcMain.handle(IpcChannels.signInWithOidc, (_event, providerId: string) =>
@@ -151,10 +168,17 @@ function createWindow(): void {
 
 void app.whenReady().then(() => {
   const identity = loadIdentityConfig();
+  const configPath = process.env.FLOWFORGE_CONFIG ?? userConfigPath();
+  const config = loadConfig(process.env.FLOWFORGE_CONFIG);
   // Persist installed packages, runs and the audit log under ~/.flowforge by
   // default (override with FLOWFORGE_DATA_DIR).
   const dataDir = process.env.FLOWFORGE_DATA_DIR ?? path.join(homedir(), '.flowforge');
-  registerIpcHandlers(new DesktopKernel({ dataDir, ...(identity ? { identity } : {}) }));
+  registerIpcHandlers(new DesktopKernel({
+    dataDir,
+    modelConfig: config,
+    configPath,
+    ...(identity ? { identity } : {})
+  }));
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

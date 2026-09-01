@@ -67,13 +67,19 @@ export function PropertyPanel({
   workflow,
   onPatch,
   onRename,
-  onDelete
+  onDelete,
+  availableSkills = [],
+  agentSkills = [],
+  onAgentSkillsChange
 }: {
   node: WorkflowNode;
   workflow: WorkflowDefinition;
   onPatch: (patch: Partial<WorkflowNode>) => void;
   onRename: (newId: string) => void;
   onDelete: () => void;
+  availableSkills?: Array<{ id: string; displayName?: string; description: string }>;
+  agentSkills?: string[];
+  onAgentSkillsChange?: (skills: string[]) => void;
 }) {
   const [idDraft, setIdDraft] = useState(node.id);
   useEffect(() => setIdDraft(node.id), [node.id]);
@@ -157,6 +163,34 @@ export function PropertyPanel({
               value={node.retry?.maxAttempts ?? 1}
               onChange={(event) => onPatch({ retry: { maxAttempts: Math.max(1, Number(event.target.value) || 1) } })}
             />
+          </Field>
+          <Field label="skills">
+            <div style={{ display: 'grid', gap: 6 }}>
+              {availableSkills.length === 0 && <span className="ff-muted">No package skills available.</span>}
+              {availableSkills.map((skill) => {
+                const checked = agentSkills.includes(skill.id);
+                return (
+                  <label key={skill.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => {
+                        if (!onAgentSkillsChange) return;
+                        onAgentSkillsChange(
+                          event.target.checked
+                            ? [...agentSkills, skill.id]
+                            : agentSkills.filter((current) => current !== skill.id)
+                        );
+                      }}
+                    />
+                    <span>
+                      <strong>{skill.displayName ?? skill.id}</strong>
+                      <div className="ff-muted" style={{ fontSize: 12 }}>{skill.description}</div>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </Field>
         </>
       )}

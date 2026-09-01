@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { AuditRecord } from '@flowforge/core';
-import type { HumanResponse, PackageSummary, RunSnapshot } from '../../../src/ipc.js';
+import type { AuditTrailSnapshot, HumanResponse, PackageSummary, RunSnapshot } from '../../../src/ipc.js';
 import { errorMessage, Empty, ErrorInline, shortId } from './common.js';
 import { usePolledRun } from './hooks.js';
 import { TaskForm } from './TaskForm.js';
@@ -29,6 +29,8 @@ export function RunsView({ packages }: { packages: PackageSummary[] }) {
   const [error, setError] = useState<string>();
   const [denied, setDenied] = useState<{ message: string; records: AuditRecord[] }>();
   const [busy, setBusy] = useState(false);
+  const [trail, setTrail] = useState<AuditTrailSnapshot>();
+  const [trailError, setTrailError] = useState<string>();
 
   const refreshRuns = useCallback(async () => {
     setRuns(await window.flowforge.listRuns());
@@ -49,6 +51,32 @@ export function RunsView({ packages }: { packages: PackageSummary[] }) {
   }, [workflows, workflowId]);
 
   const { run } = usePolledRun(activeRunId);
+
+  useEffect(() => {
+    if (!activeRunId) {
+      setTrail(undefined);
+      setTrailError(undefined);
+      return;
+    }
+    let cancelled = false;
+    setTrailError(undefined);
+    window.flowforge
+      .getAuditTrail(activeRunId)
+      .then((nextTrail) => {
+        if (!cancelled) setTrail(nextTrail);
+      })
+      .catch((err) => {
+        if (!cancelled) setTrailError(errorMessage(err));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, run?.status, run?.currentNodeId, run?.pending?.nodeId]);
+
+  const agentSteps = useMemo(
+    () => (trail?.records ?? []).filter((record) => record.action === 'agent.step'),
+    [trail]
+  );
 
   const startRun = async () => {
     if (!packageId || !workflowId) return;
@@ -193,6 +221,11 @@ export function RunsView({ packages }: { packages: PackageSummary[] }) {
                     <dd>{run.pending.role}</dd>
                   </>
                 )}
+                <dt>Latest model</dt>
+                <dd>
+                  {agentSteps.at(-1)?.model?.provider ?? '—'}
+                  {agentSteps.at(-1)?.model?.name ? ` · ${agentSteps.at(-1)!.model!.name}` : ''}
+                </dd>
               </dl>
 
               {run.status === 'failed' && (
@@ -200,6 +233,39 @@ export function RunsView({ packages }: { packages: PackageSummary[] }) {
                   <h4>Run failed</h4>
                   <pre>{run.error ?? 'No error detail.'}</pre>
                 </div>
+              )}
+
+              <ErrorInline error={trailError} />
+              {agentSteps.length > 0 && (
+                <>
+                  <h4 style={{ margin: '16px 0 8px' }}>Agent output</h4>
+                  <table className="ff-table">
+                    <thead>
+                      <tr>
+                        <th>Node</th>
+                        <th>Agent</th>
+                        <th>Provider</th>
+                        <th>Model</th>
+                        <th>Output</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {agentSteps.map((record) => (
+                        <tr key={record.id}>
+                          <td className="ff-monospace">{record.nodeId ?? '—'}</td>
+                          <td>{record.actor.id}</td>
+                          <td>{record.model?.provider ?? '—'}</td>
+                          <td>{record.model?.name ?? '—'}</td>
+                          <td>
+                            <pre className="ff-pre" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                              {String(record.detail?.outputPreview ?? '—')}
+                            </pre>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
 
               {run.pending && <TaskForm pending={run.pending} onSubmit={(response) => void resume(response)} />}

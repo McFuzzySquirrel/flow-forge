@@ -12,6 +12,8 @@
  * class instances.  They survive JSON round-trips and Electron structuredClone.
  */
 import type { AuditRecord, WorkflowDefinition } from '@flowforge/core';
+import type { ModelConfigSnapshot } from './config.js';
+import type { MessageFilter, MessageRecord, SendMessageInput } from './messaging.js';
 
 // ---------------------------------------------------------------------------
 // Snapshot types
@@ -32,6 +34,12 @@ export interface AgentSummary {
   defaultPersona?: string;
 }
 
+export interface SkillSummary {
+  id: string;
+  displayName?: string;
+  description: string;
+}
+
 export interface WorkflowSummary {
   id: string;
   description?: string;
@@ -48,6 +56,7 @@ export interface PackageSummary {
   /** Absolute directory from which the package was loaded. */
   dir: string;
   agents: AgentSummary[];
+  skills: SkillSummary[];
   workflows: WorkflowSummary[];
   /** Package branding for the home screen. */
   branding?: { displayName?: string; primaryColor?: string; icon?: string };
@@ -216,6 +225,13 @@ export interface KernelApi {
 
   /** Get a loaded workflow's full definition (the visual editor renders this). */
   getWorkflow(packageId: string, workflowId: string): WorkflowDefinition;
+  saveWorkflow(packageId: string, workflow: WorkflowDefinition): WorkflowSummary;
+  updateAgentSkills(packageId: string, agentId: string, skills: string[]): AgentSummary;
+
+  // ---- Model configuration -------------------------------------------------
+
+  getModelConfig(): ModelConfigSnapshot;
+  updateModelConfig(config: ModelConfigSnapshot): ModelConfigSnapshot;
 
   // ---- Identity -----------------------------------------------------------
 
@@ -258,4 +274,9 @@ export interface KernelApi {
   signOut(): void;
 
   getCurrentUser(): UserSnapshot | undefined;
+
+  // ---- Messaging -----------------------------------------------------------
+
+  listMessages(filter?: MessageFilter): Promise<MessageRecord[]>;
+  sendMessage(message: SendMessageInput): Promise<MessageRecord>;
 }

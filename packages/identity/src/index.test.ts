@@ -100,6 +100,15 @@ describe('IdentityRegistry', () => {
       })
     ).toThrow(/requires 'issuer' and 'clientId'/);
   });
+
+  it('accepts oauth as an alias for discovery-backed providers', () => {
+    expect(() =>
+      IdentityRegistry.fromConfig({
+        providers: [{ id: 'entra', type: 'oauth', issuer: 'https://login.example.com/tenant', clientId: 'abc' }],
+        roleMappings: []
+      })
+    ).not.toThrow();
+  });
 });
 
 describe('IdentityService', () => {

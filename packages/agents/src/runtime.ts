@@ -49,6 +49,11 @@ function tryParseJson(text: string): unknown {
   }
 }
 
+function outputPreview(value: unknown): string {
+  const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+  return text.length > 400 ? `${text.slice(0, 400)}…` : text;
+}
+
 /**
  * Generic agent executor. Loads agent config + skills + persona overlay from
  * the package, recalls relevant memory, calls the model provider, records an
@@ -132,7 +137,7 @@ export class AgentRuntime {
       score: typeof structured.score === 'number' ? structured.score : undefined,
       confidence: typeof structured.confidence === 'number' ? structured.confidence : undefined,
       section: typeof structured.section === 'string' ? structured.section : undefined,
-      detail: { action: request.action }
+      detail: { action: request.action, outputPreview: outputPreview(output) }
     });
 
     return { output, raw: completion.content, model: completion.model, promptVersion, evidence };

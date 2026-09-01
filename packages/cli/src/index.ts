@@ -28,15 +28,12 @@ import { AuditLog } from '@flowforge/audit';
 import { FileVectorStore, MemoryService } from '@flowforge/memory';
 import {
   AgentRuntime,
-  DeepSeekProvider,
   MockModelProvider,
-  ModelRegistry,
-  OllamaProvider,
-  OpenAICompatibleProvider
+  ModelRegistry
 } from '@flowforge/agents';
 import { IdentityService, MockIdentityProvider } from '@flowforge/identity';
 import { WorkflowEngine } from '@flowforge/workflow';
-import { FlowForgeKernel, ENGINE_VERSION } from '@flowforge/kernel';
+import { FlowForgeKernel, ENGINE_VERSION, resolveModelRegistry } from '@flowforge/kernel';
 import {
   defaultArchivePath,
   generateSigningKeypair,
@@ -185,72 +182,6 @@ export function inspectCommand(packageDir: string): number {
 // ---------------------------------------------------------------------------
 // run
 // ---------------------------------------------------------------------------
-
-/** Resolve a model provider from the `--provider`/`--api-key` flags, env or config (default Ollama). */
-function resolveProvider(
-  providerName: string | undefined,
-  apiKey: string | undefined,
-  config: FlowForgeConfig
-): import('@flowforge/agents').ModelProvider {
-  const key = apiKey ?? process.env.DEEPSEEK_API_KEY ?? process.env.OPENAI_API_KEY;
-  switch (providerName) {
-    case 'deepseek':
-      if (!key) throw new Error('DeepSeek requires an API key (--api-key or DEEPSEEK_API_KEY)');
-      return new DeepSeekProvider(key);
-    case 'openai': {
-      if (!key) throw new Error('OpenAI requires an API key (--api-key or OPENAI_API_KEY)');
-      const cloud = config.provider.cloud;
-      return new OpenAICompatibleProvider(
-        cloud?.baseUrl ?? 'https://api.openai.com/v1',
-        key,
-        cloud?.model ?? 'gpt-4o-mini'
-      );
-    }
-    case undefined:
-    case 'ollama': {
-      const ollama = config.provider.ollama;
-      return new OllamaProvider(ollama?.url ?? 'http://localhost:11434', ollama?.model ?? 'llama3.2');
-    }
-    case 'hybrid':
-      throw new Error("'hybrid' is resolved per tier; run 'flowforge setup' to configure a hybrid mapping");
-    default:
-      throw new Error(`Unknown provider '${providerName}' (expected 'ollama', 'deepseek', 'openai' or 'hybrid')`);
-  }
-}
-
-/** Build a ModelRegistry honouring a per-tier hybrid mapping from config. */
-function resolveModelRegistry(
-  providerName: string | undefined,
-  apiKey: string | undefined,
-  config: FlowForgeConfig
-): ModelRegistry {
-  const name = providerName ?? process.env.FLOWFORGE_PROVIDER ?? config.provider.type;
-  const registry = new ModelRegistry();
-  if (name === 'hybrid') {
-    const hybrid = config.provider.hybrid;
-    if (!hybrid) throw new Error("'hybrid' selected but config.provider.hybrid is missing (run 'flowforge setup')");
-    const key = apiKey ?? process.env.OPENAI_API_KEY;
-    const tiers = ['small', 'medium', 'large'] as const;
-    for (const tier of tiers) {
-      const spec = hybrid[tier];
-      if (!spec) throw new Error(`Hybrid mapping is missing tier '${tier}'`);
-      let provider: import('@flowforge/agents').ModelProvider;
-      if (spec.type === 'ollama') {
-        provider = new OllamaProvider(config.provider.ollama?.url ?? 'http://localhost:11434', spec.model);
-      } else {
-        if (!key) throw new Error('Cloud tier requires an API key (--api-key or OPENAI_API_KEY)');
-        provider = new OpenAICompatibleProvider(
-          config.provider.cloud?.baseUrl ?? 'https://api.openai.com/v1',
-          key,
-          spec.model
-        );
-      }
-      registry.set(tier, provider);
-    }
-    return registry;
-  }
-  return registry.set('small', resolveProvider(name, apiKey, config)).set('medium', resolveProvider(name, apiKey, config)).set('large', resolveProvider(name, apiKey, config));
-}
 
 export async function runCommand(
   packageDir: string,

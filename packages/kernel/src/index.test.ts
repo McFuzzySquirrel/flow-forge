@@ -1,8 +1,8 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FlowForgeKernel, ENGINE_VERSION } from './index.js';
+import { defaultConfig, FlowForgeKernel, ENGINE_VERSION } from './index.js';
 import { packWorkforce, unpackWorkforce, generateSigningKeypair } from '@flowforge/packaging';
 import { loadWorkforcePackage } from '@flowforge/packages';
 import { AgentRuntime, MockModelProvider, ModelRegistry } from '@flowforge/agents';
@@ -295,6 +295,14 @@ describe('FlowForgeKernel (file-backed persistence)', () => {
     rmSync(dataDir, { recursive: true, force: true });
   });
 
+  function copyFixturePackage(): string {
+    const archive = join(dataDir, 'fixture-copy.workforce');
+    const copied = join(dataDir, 'fixture-copy');
+    packWorkforce(fixture, archive);
+    unpackWorkforce(archive, copied);
+    return copied;
+  }
+
   it('persists a loaded package across kernel instances', () => {
     const k1 = new FlowForgeKernel({ dataDir });
     k1.loadPackage(fixture);
@@ -332,5 +340,66 @@ describe('FlowForgeKernel (file-backed persistence)', () => {
     const trailAfter = k2.getAuditTrail();
     expect(trailAfter.records.length).toBeGreaterThan(trailBefore.records.length);
     expect(trailAfter.chainIntact).toBe(true);
+  });
+
+  it('persists saved workflow and agent skill edits back to package files', async () => {
+    const copied = copyFixturePackage();
+    const kernel = new FlowForgeKernel({ dataDir });
+    const pkg = kernel.loadPackage(copied);
+    const workflow = kernel.getWorkflow(pkg.id, 'assignment');
+
+    kernel.saveWorkflow(pkg.id, { ...workflow, description: 'Updated in the desktop editor.' });
+    kernel.updateAgentSkills(pkg.id, 'assessment', ['algebra', 'reflection']);
+
+    const savedWorkflow = JSON.parse(readFileSync(join(copied, 'workflows/assignment.json'), 'utf8')) as { description: string };
+    const savedAgent = JSON.parse(readFileSync(join(copied, 'agents/assessment/agent.json'), 'utf8')) as { skills: string[] };
+    expect(savedWorkflow.description).toBe('Updated in the desktop editor.');
+    expect(savedAgent.skills).toEqual(['algebra', 'reflection']);
+    expect(kernel.listPackages()[0]!.skills.some((skill) => skill.id === 'reflection')).toBe(true);
+    expect(kernel.listPackages()[0]!.agents.find((agent) => agent.id === 'assessment')!.skills).toEqual([
+      'algebra',
+      'reflection'
+    ]);
+  });
+
+  it('reads and updates secret-free model config', () => {
+    const configPath = join(dataDir, 'flowforge.config.json');
+    const kernel = new FlowForgeKernel({ dataDir, configPath, modelConfig: defaultConfig(dataDir) });
+
+    expect(kernel.getModelConfig().provider.type).toBe('ollama');
+    kernel.updateModelConfig({
+      provider: {
+        type: 'hybrid',
+        ollama: { url: 'http://localhost:11434', model: 'llama3.2', embeddingModel: 'nomic-embed-text' },
+        cloud: { baseUrl: 'https://api.openai.com/v1', model: 'gpt-4o-mini' },
+        hybrid: {
+          small: { type: 'ollama', model: 'qwen2.5:3b' },
+          medium: { type: 'ollama', model: 'llama3.2' },
+          large: { type: 'cloud', model: 'gpt-4o' }
+        }
+      }
+    });
+
+    const saved = JSON.parse(readFileSync(configPath, 'utf8')) as { provider: { type: string } };
+    expect(saved.provider.type).toBe('hybrid');
+    expect(kernel.getModelConfig().configPath).toBe(configPath);
+  });
+
+  it('stores messages through the kernel messaging boundary', async () => {
+    const kernel = new FlowForgeKernel({ dataDir });
+    const pkg = kernel.loadPackage(fixture);
+    await kernel.signIn('teacher');
+
+    const sent = await kernel.sendMessage({
+      recipient: { kind: 'agent', id: 'assessment' },
+      content: 'Please review the latest submission.',
+      packageId: pkg.id
+    });
+
+    expect(sent.sender.id).toBe('dev-teacher');
+    const messages = await kernel.listMessages({ packageId: pkg.id, recipientKind: 'agent' });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]!.content).toContain('review');
+    expect(kernel.getAuditTrail().records.some((record) => record.action === 'message.sent')).toBe(true);
   });
 });

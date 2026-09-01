@@ -20,11 +20,13 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
+  AgentDefinition,
   IdentityConfig,
   LoadedWorkforcePackage,
   Principal,
   WorkflowDefinition
 } from '@flowforge/core';
+import { validate } from '@flowforge/core';
 import { loadWorkforcePackage, PackageValidationError } from '@flowforge/packages';
 import {
   checkEngineCompatibility,
@@ -48,6 +50,7 @@ import {
   type StateStore
 } from '@flowforge/workflow';
 import type {
+  AgentSummary,
   AuditFilter,
   AuditTrailSnapshot,
   GovernanceSummary,
@@ -57,11 +60,27 @@ import type {
   PackageSummary,
   PackageValidationResult,
   RunSnapshot,
+  SkillSummary,
+  WorkflowSummary,
   TokenSetLike,
   UserSnapshot
 } from './api.js';
 import type { AuditRecord } from '@flowforge/core';
 import type { WorkflowRun } from '@flowforge/workflow';
+import {
+  defaultConfig,
+  resolveModelRegistry,
+  saveConfig,
+  type FlowForgeConfig,
+  type ModelConfigSnapshot
+} from './config.js';
+import {
+  InMemoryMessagingTransport,
+  type MessageFilter,
+  type MessageRecord,
+  type MessagingTransport,
+  type SendMessageInput
+} from './messaging.js';
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -106,6 +125,11 @@ function toPackageSummary(pkg: LoadedWorkforcePackage, signing?: LoadedPackageEn
       modelTier: agent.model.tier,
       skills: agent.skills ?? [],
       defaultPersona: agent.defaultPersona
+    })),
+    skills: [...pkg.skills.values()].map((skill) => ({
+      id: skill.manifest.name,
+      displayName: skill.manifest.metadata?.displayName,
+      description: skill.manifest.description
     })),
     workflows: [...pkg.workflows.values()].map((workflow) => ({
       id: workflow.id,
@@ -161,17 +185,32 @@ export interface FlowForgeKernelOptions {
   dataDir?: string;
   /** Model provider override (defaults to MockModelProvider). */
   modelProvider?: ModelProvider;
+  /** Model registry override, typically built from flowforge.config.json. */
+  modelRegistry?: ModelRegistry;
+  /** Secret-free runtime config used to build providers and expose admin settings. */
+  modelConfig?: FlowForgeConfig;
+  /** Path to the secret-free runtime config file. */
+  configPath?: string;
+  /** Environment used to resolve provider-specific API keys. */
+  env?: NodeJS.ProcessEnv;
   /** Deployment identity configuration (OIDC providers + role mappings). When
    *  omitted the kernel uses a dev identity (one mock user per workflow role). */
   identity?: IdentityConfig;
+  /** Messaging transport abstraction for human↔human and human↔agent messaging. */
+  messaging?: MessagingTransport;
 }
 
 export class FlowForgeKernel implements KernelApi {
   private readonly audit: AuditLog;
   private readonly stateStore: StateStore;
-  private readonly modelProvider: ModelProvider;
   private readonly dataDir: string | undefined;
   private readonly identityConfig?: IdentityConfig;
+  private readonly env: NodeJS.ProcessEnv;
+  private readonly fallbackModelProvider: ModelProvider;
+  private readonly messaging: MessagingTransport;
+  private readonly configPath?: string;
+  private modelConfig: FlowForgeConfig;
+  private modelRegistry?: ModelRegistry;
 
   /** Loaded packages, keyed by package id. */
   private readonly loadedPackages = new Map<string, LoadedPackageEntry>();
@@ -184,8 +223,13 @@ export class FlowForgeKernel implements KernelApi {
   constructor(options: FlowForgeKernelOptions = {}) {
     this.dataDir = options.dataDir;
     this.identityConfig = options.identity;
-    this.modelProvider =
+    this.env = options.env ?? process.env;
+    this.configPath = options.configPath;
+    this.fallbackModelProvider =
       options.modelProvider ?? new MockModelProvider(() => JSON.stringify({ note: 'mock response' }));
+    this.modelConfig = structuredClone(options.modelConfig ?? defaultConfig());
+    this.modelRegistry = options.modelRegistry;
+    this.messaging = options.messaging ?? new InMemoryMessagingTransport();
 
     if (options.dataDir) {
       const runsDir = join(options.dataDir, 'runs');
@@ -387,6 +431,60 @@ export class FlowForgeKernel implements KernelApi {
     return workflow;
   }
 
+  saveWorkflow(packageId: string, workflow: WorkflowDefinition): WorkflowSummary {
+    const entry = this.entry(packageId);
+    const relPath = entry.pkg.workflowFiles.get(workflow.id);
+    if (!relPath) throw new Error(`Unknown workflow '${workflow.id}' in package '${packageId}'`);
+    const validation = validate('workflow', workflow);
+    if (!validation.valid) {
+      throw new Error(`Invalid workflow '${workflow.id}': ${validation.errors.join('; ')}`);
+    }
+    writeFileSync(join(entry.pkg.rootDir, relPath), `${JSON.stringify(workflow, null, 2)}\n`, 'utf8');
+    const reloaded = this.loadPackageInternal(entry.pkg.rootDir, entry.signing);
+    const summary = reloaded.workflows.find((candidate) => candidate.id === workflow.id);
+    if (!summary) throw new Error(`Workflow '${workflow.id}' disappeared after save`);
+    return summary;
+  }
+
+  updateAgentSkills(packageId: string, agentId: string, skills: string[]): AgentSummary {
+    const entry = this.entry(packageId);
+    const relPath = entry.pkg.agentFiles.get(agentId);
+    if (!relPath) throw new Error(`Unknown agent '${agentId}' in package '${packageId}'`);
+    const nextSkills = [...new Set(skills.map((skill) => skill.trim()).filter(Boolean))];
+    for (const skill of nextSkills) {
+      if (!entry.pkg.skills.has(skill)) throw new Error(`Unknown skill '${skill}' in package '${packageId}'`);
+    }
+    const agentPath = join(entry.pkg.rootDir, relPath);
+    const current = JSON.parse(readFileSync(agentPath, 'utf8')) as AgentDefinition;
+    const updated: AgentDefinition = { ...current, skills: nextSkills };
+    const validation = validate('agent', updated);
+    if (!validation.valid) throw new Error(`Invalid agent '${agentId}': ${validation.errors.join('; ')}`);
+    writeFileSync(agentPath, `${JSON.stringify(updated, null, 2)}\n`, 'utf8');
+    const reloaded = this.loadPackageInternal(entry.pkg.rootDir, entry.signing);
+    const summary = reloaded.agents.find((candidate) => candidate.id === agentId);
+    if (!summary) throw new Error(`Agent '${agentId}' disappeared after save`);
+    return summary;
+  }
+
+  getModelConfig(): ModelConfigSnapshot {
+    return {
+      ...(this.configPath ? { configPath: this.configPath } : {}),
+      provider: structuredClone(this.modelConfig.provider)
+    };
+  }
+
+  updateModelConfig(config: ModelConfigSnapshot): ModelConfigSnapshot {
+    this.modelConfig = { ...this.modelConfig, provider: structuredClone(config.provider) };
+    if (this.configPath) saveConfig(this.modelConfig, this.configPath);
+    try {
+      this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
+    } catch {
+      this.modelRegistry = undefined;
+    }
+    this.reloadLoadedPackages();
+    return this.getModelConfig();
+  }
+
   // ---- Identity -----------------------------------------------------------
 
   listIdentityProviders(): IdentityProviderSummary[] {
@@ -482,6 +580,37 @@ export class FlowForgeKernel implements KernelApi {
     return principal ? toUserSnapshot(principal) : undefined;
   }
 
+  async listMessages(filter?: MessageFilter): Promise<MessageRecord[]> {
+    return this.messaging.listMessages(filter);
+  }
+
+  async sendMessage(message: SendMessageInput): Promise<MessageRecord> {
+    const principal = this.currentPrincipal();
+    if (!principal) throw new Error('Sign in before sending a message');
+    const created = await this.messaging.sendMessage({
+      id: '',
+      createdAt: new Date().toISOString(),
+      sender: {
+        type: 'human',
+        id: principal.id,
+        provider: principal.provider,
+        roles: principal.roles
+      },
+      recipient: message.recipient,
+      content: message.content,
+      workflowRunId: message.workflowRunId,
+      packageId: message.packageId
+    });
+    this.audit.record({
+      actor: { type: 'human', id: principal.id, provider: principal.provider, roles: principal.roles },
+      action: 'message.sent',
+      workflowRunId: message.workflowRunId,
+      packageId: message.packageId,
+      detail: { recipient: message.recipient, messageId: created.id }
+    });
+    return created;
+  }
+
   // ---- Private helpers ----------------------------------------------------
 
   /** Internal: load a package directory into memory without touching the registry file. */
@@ -496,10 +625,7 @@ export class FlowForgeKernel implements KernelApi {
         `Package '${pkg.manifest.id}' is not compatible with engine ${ENGINE_VERSION}: ${compat.reason}`
       );
     }
-    const models = new ModelRegistry()
-      .set('small', this.modelProvider)
-      .set('medium', this.modelProvider)
-      .set('large', this.modelProvider);
+    const models = this.buildModelRegistry();
     const memory = new MemoryService();
     const engine = new WorkflowEngine(
       new AgentRuntime(pkg, models, memory, this.audit),
@@ -520,6 +646,27 @@ export class FlowForgeKernel implements KernelApi {
   private currentPrincipal(): Principal | undefined {
     if (!this.identity || !this.sessionId) return undefined;
     return this.identity.getSession(this.sessionId)?.principal;
+  }
+
+  private buildModelRegistry(): ModelRegistry {
+    if (this.modelRegistry) return this.modelRegistry;
+    try {
+      this.modelRegistry = resolveModelRegistry(undefined, undefined, this.modelConfig, this.env);
+      return this.modelRegistry;
+    } catch {
+      return new ModelRegistry()
+        .set('small', this.fallbackModelProvider)
+        .set('medium', this.fallbackModelProvider)
+        .set('large', this.fallbackModelProvider);
+    }
+  }
+
+  private reloadLoadedPackages(): void {
+    const existing = [...this.loadedPackages.values()].map(({ pkg, signing }) => ({ dir: pkg.rootDir, signing }));
+    this.loadedPackages.clear();
+    for (const entry of existing) {
+      this.loadPackageInternal(entry.dir, entry.signing);
+    }
   }
 
   /**
@@ -594,18 +741,50 @@ export class FlowForgeKernel implements KernelApi {
 
 // Re-export API types for consumers that import from this package.
 export type {
+  AgentSummary,
   AuditFilter,
   AuditTrailSnapshot,
   GovernanceSummary,
   HumanResponse,
   IdentityProviderSummary,
   KernelApi,
+  ModelConfigSnapshot,
   PackageSummary,
   PackageValidationResult,
   PendingTaskSnapshot,
   RunSnapshot,
+  SkillSummary,
   TokenSetLike,
   UserSnapshot,
   WorkflowSummary,
-  AgentSummary,
 } from './api.js';
+export {
+  assertNoSecrets,
+  defaultConfig,
+  loadConfig,
+  readConfigFile,
+  repoConfigPath,
+  resolveModelRegistry,
+  saveConfig,
+  userConfigPath,
+  validateConfig
+} from './config.js';
+export type {
+  CloudProviderConfig,
+  DeepPartial,
+  FlowForgeConfig,
+  HybridMapping,
+  OllamaProviderConfig,
+  ProviderType,
+  TierSpec
+} from './config.js';
+export {
+  InMemoryMessagingTransport,
+} from './messaging.js';
+export type {
+  MessageFilter,
+  MessageRecipient,
+  MessageRecord,
+  MessagingTransport,
+  SendMessageInput
+} from './messaging.js';

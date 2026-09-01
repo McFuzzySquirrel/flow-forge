@@ -23,8 +23,8 @@
           },
           "type": {
             "type": "string",
-            "enum": ["oidc", "mock"],
-            "description": "'oidc' for any OpenID Connect compliant provider; 'mock' for tests and offline development."
+            "enum": ["oidc", "oauth", "mock"],
+            "description": "'oidc' or 'oauth' for discovery-backed OAuth/OpenID Connect providers; 'mock' for tests and offline development."
           },
           "displayName": { "type": "string" },
           "issuer": {

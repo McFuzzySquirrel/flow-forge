@@ -16,11 +16,17 @@ export const IpcChannels = {
   installPackage: 'flowforge:install-package',
   installWorkflowArchive: 'flowforge:install-workflow-archive',
   getWorkflow: 'flowforge:get-workflow',
+  saveWorkflow: 'flowforge:save-workflow',
+  updateAgentSkills: 'flowforge:update-agent-skills',
   startRun: 'flowforge:start-run',
   resumeRun: 'flowforge:resume-run',
   listRuns: 'flowforge:list-runs',
   getRun: 'flowforge:get-run',
   getAuditTrail: 'flowforge:get-audit-trail',
+  getModelConfig: 'flowforge:get-model-config',
+  updateModelConfig: 'flowforge:update-model-config',
+  listMessages: 'flowforge:list-messages',
+  sendMessage: 'flowforge:send-message',
   signIn: 'flowforge:sign-in',
   signInWithOidc: 'flowforge:sign-in-with-oidc',
   listIdentityProviders: 'flowforge:list-identity-providers',
@@ -36,10 +42,15 @@ export type {
   GovernanceSummary,
   HumanResponse,
   IdentityProviderSummary,
+  MessageFilter,
+  MessageRecord,
+  ModelConfigSnapshot,
   PackageSummary,
   PackageValidationResult,
   PendingTaskSnapshot,
   RunSnapshot,
+  SendMessageInput,
+  SkillSummary,
   UserSnapshot,
   WorkflowSummary
 } from '@flowforge/kernel';
@@ -49,9 +60,13 @@ import type {
   GovernanceSummary,
   HumanResponse,
   IdentityProviderSummary,
+  MessageFilter,
+  MessageRecord,
+  ModelConfigSnapshot,
   PackageSummary,
   PackageValidationResult,
   RunSnapshot,
+  SendMessageInput,
   UserSnapshot
 } from '@flowforge/kernel';
 import type { WorkflowDefinition } from '@flowforge/core';
@@ -89,6 +104,8 @@ export interface FlowForgeApi {
   // ---- Workflows (read-only graph access for the editor) -------------------
 
   getWorkflow(packageId: string, workflowId: string): Promise<WorkflowDefinition>;
+  saveWorkflow(packageId: string, workflow: WorkflowDefinition): Promise<void>;
+  updateAgentSkills(packageId: string, agentId: string, skills: string[]): Promise<void>;
 
   // ---- Runs ----------------------------------------------------------------
 
@@ -100,6 +117,8 @@ export interface FlowForgeApi {
   // ---- Audit ---------------------------------------------------------------
 
   getAuditTrail(runId?: string): Promise<AuditTrailSnapshot>;
+  getModelConfig(): Promise<ModelConfigSnapshot>;
+  updateModelConfig(config: ModelConfigSnapshot): Promise<ModelConfigSnapshot>;
 
   // ---- Identity ------------------------------------------------------------
 
@@ -119,4 +138,9 @@ export interface FlowForgeApi {
   getGovernance(): Promise<GovernanceSummary>;
   signOut(): Promise<void>;
   getCurrentUser(): Promise<UserSnapshot | undefined>;
+
+  // ---- Messaging -----------------------------------------------------------
+
+  listMessages(filter?: MessageFilter): Promise<MessageRecord[]>;
+  sendMessage(message: SendMessageInput): Promise<MessageRecord>;
 }

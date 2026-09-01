@@ -65,7 +65,7 @@ export function IdentityView({
   return (
     <div>
       <h1 className="ff-page-title">Identity</h1>
-      <p className="ff-page-sub">Sign in with the dev identity (one mock user per role) or an OIDC provider.</p>
+      <p className="ff-page-sub">Sign in with the dev identity (one mock user per role) or an OAuth/OIDC provider.</p>
 
       <ErrorInline error={error} />
 
@@ -123,7 +123,7 @@ export function IdentityView({
 
         <section className="ff-card">
           <header className="ff-card-header">
-            <h3>OIDC providers</h3>
+            <h3>OAuth / OIDC providers</h3>
           </header>
           <div className="ff-card-body">
             {oidcProviders.length === 0 ? (

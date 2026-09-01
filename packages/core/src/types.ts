@@ -72,6 +72,8 @@ export interface LoadedSkill {
   instructions: string;
   /** Absolute path to the skill folder. */
   dir: string;
+  /** Relative path from the package root used to load this skill. */
+  relativePath?: string;
 }
 
 export interface PersonaDefinition {
@@ -204,9 +206,12 @@ export interface LoadedWorkforcePackage {
   rootDir: string;
   manifest: WorkforcePackageManifest;
   agents: Map<string, AgentDefinition>;
+  agentFiles: Map<string, string>;
   skills: Map<string, LoadedSkill>;
+  skillFiles: Map<string, string>;
   personas: Map<string, PersonaDefinition>;
   workflows: Map<string, WorkflowDefinition>;
+  workflowFiles: Map<string, string>;
 }
 
 /** An authenticated user, normalized across identity providers (ADR-0010). */
@@ -233,7 +238,7 @@ export type Permission =
 
 export interface IdentityProviderConfig {
   id: string;
-  type: 'oidc' | 'mock';
+  type: 'oidc' | 'oauth' | 'mock';
   displayName?: string;
   issuer?: string;
   clientId?: string;
