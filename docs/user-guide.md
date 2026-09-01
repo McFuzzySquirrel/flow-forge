@@ -313,6 +313,7 @@ published it. To author your own package from scratch, follow the
 ## Where to go next
 
 - [Package author guide](authoring-packages.md) — build your own workforce
+- [Auth identities guide](auth-identities.md) — configure Microsoft Entra ID, Google Workspace, Auth0, Keycloak, or the dev mock provider
 - [Testing guide](testing.md) — how the platform is tested and how to wire real models
 - [Dapr runner](dapr-runner.md) — running workflows on a hosted Dapr stack
 - [Architecture & roadmap](PLAN.md) — the full build plan and design rules
