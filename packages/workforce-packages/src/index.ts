@@ -56,7 +56,7 @@ export function parseSkillFile(path: string, label: string): LoadedSkill {
       `frontmatter name '${manifest.name}' must match the skill folder name '${basename(dir)}'`
     ]);
   }
-  return { manifest, instructions: source.slice(match[0].length).trim(), dir };
+  return { manifest, instructions: source.slice(match[0].length).trim(), dir, relativePath: label };
 }
 
 function assertValid(schema: Parameters<typeof validate>[0], doc: unknown, label: string): void {
@@ -76,6 +76,7 @@ export function loadWorkforcePackage(packageDir: string): LoadedWorkforcePackage
   assertValid('workforce-package', manifest, 'workforce.json');
 
   const agents = new Map<string, AgentDefinition>();
+  const agentFiles = new Map<string, string>();
   for (const relPath of manifest.agents) {
     const agentPath = join(rootDir, relPath);
     const agent = readJson(agentPath) as AgentDefinition;
@@ -88,15 +89,18 @@ export function loadWorkforcePackage(packageDir: string): LoadedWorkforcePackage
       agent.systemPrompt = readFileSync(join(dirname(agentPath), agent.systemPrompt), 'utf8');
     }
     agents.set(agent.id, agent);
+    agentFiles.set(agent.id, relPath);
   }
 
   const skills = new Map<string, LoadedSkill>();
+  const skillFiles = new Map<string, string>();
   for (const relPath of manifest.skills ?? []) {
     const skill = parseSkillFile(join(rootDir, relPath), relPath);
     if (skills.has(skill.manifest.name)) {
       throw new PackageValidationError('Duplicate skill name', [skill.manifest.name]);
     }
     skills.set(skill.manifest.name, skill);
+    skillFiles.set(skill.manifest.name, relPath);
   }
 
   const personas = new Map<string, PersonaDefinition>();
@@ -107,10 +111,12 @@ export function loadWorkforcePackage(packageDir: string): LoadedWorkforcePackage
   }
 
   const workflows = new Map<string, WorkflowDefinition>();
+  const workflowFiles = new Map<string, string>();
   for (const relPath of manifest.workflows) {
     const workflow = readJson(join(rootDir, relPath)) as WorkflowDefinition;
     assertValid('workflow', workflow, relPath);
     workflows.set(workflow.id, workflow);
+    workflowFiles.set(workflow.id, relPath);
   }
 
   const crossErrors: string[] = [];
@@ -146,5 +152,5 @@ export function loadWorkforcePackage(packageDir: string): LoadedWorkforcePackage
     throw new PackageValidationError('Cross-reference validation failed', crossErrors);
   }
 
-  return { rootDir, manifest, agents, skills, personas, workflows };
+  return { rootDir, manifest, agents, agentFiles, skills, skillFiles, personas, workflows, workflowFiles };
 }

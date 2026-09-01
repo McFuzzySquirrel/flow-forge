@@ -36,7 +36,13 @@ import { advanceDryRun, createDryRun, respondDryRun, type DryRunState } from './
 
 const NODE_TYPES_OPTIONS: WorkflowNodeType[] = ['agent', 'humanInput', 'humanApproval', 'branch', 'parallel', 'end'];
 
-export function WorkflowEditorView({ packages }: { packages: PackageSummary[] }) {
+export function WorkflowEditorView({
+  packages,
+  onPackagesChanged
+}: {
+  packages: PackageSummary[];
+  onPackagesChanged: () => Promise<void>;
+}) {
   const [packageId, setPackageId] = useState('');
   const [workflowId, setWorkflowId] = useState('');
 
@@ -46,6 +52,8 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string>();
   const [newNodeType, setNewNodeType] = useState<WorkflowNodeType>('agent');
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string>();
 
   const [watchInput, setWatchInput] = useState('');
   const [watchTarget, setWatchTarget] = useState<string>();
@@ -62,6 +70,10 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
 
   const workflows = useMemo(
     () => packages.find((pkg) => pkg.id === packageId)?.workflows ?? [],
+    [packages, packageId]
+  );
+  const activePackage = useMemo(
+    () => packages.find((pkg) => pkg.id === packageId),
     [packages, packageId]
   );
 
@@ -200,6 +212,20 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
 
   const selectedNodeId = nodes.find((node) => node.selected)?.id;
   const selectedNode = workflow?.nodes.find((node) => node.id === selectedNodeId);
+  const selectedAgentSummary =
+    selectedNode?.type === 'agent' ? activePackage?.agents.find((agent) => agent.id === selectedNode.agent) : undefined;
+
+  const handleAgentSkillsChange = async (skills: string[]) => {
+    if (!packageId || selectedNode?.type !== 'agent') return;
+    setLoadError(undefined);
+    try {
+      await window.flowforge.updateAgentSkills(packageId, selectedNode.agent, skills);
+      await onPackagesChanged();
+      setSaveMessage(`Updated skills for agent ${selectedNode.agent}.`);
+    } catch (err) {
+      setLoadError(errorMessage(err));
+    }
+  };
 
   const patchSelectedNode = useCallback(
     (patch: Partial<WorkflowNode>) => {
@@ -245,6 +271,23 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
     anchor.download = `${wf.id}.workflow.json`;
     anchor.click();
     URL.revokeObjectURL(url);
+  };
+
+  const saveWorkflow = async () => {
+    const wf = workflowRef.current;
+    if (!wf || !packageId || validationErrors.length > 0) return;
+    setSaveBusy(true);
+    setSaveMessage(undefined);
+    setLoadError(undefined);
+    try {
+      await window.flowforge.saveWorkflow(packageId, wf);
+      await onPackagesChanged();
+      setSaveMessage(`Saved ${wf.id} to the installed package.`);
+    } catch (err) {
+      setLoadError(errorMessage(err));
+    } finally {
+      setSaveBusy(false);
+    }
   };
 
   // ---- Live run overlay ----------------------------------------------------
@@ -351,8 +394,11 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
         <button className="ff-btn" onClick={resetWorkflow} disabled={!workflow}>
           Reset
         </button>
-        <button className="ff-btn primary" onClick={saveJson} disabled={!workflow || validationErrors.length > 0}>
-          Save JSON
+        <button className="ff-btn primary" onClick={() => void saveWorkflow()} disabled={saveBusy || !workflow || validationErrors.length > 0}>
+          Save workflow
+        </button>
+        <button className="ff-btn" onClick={saveJson} disabled={!workflow}>
+          Export JSON
         </button>
         <span className={`ff-badge ${validationErrors.length === 0 ? 'green' : 'red'}`}>
           {validationErrors.length === 0 ? 'valid' : `${validationErrors.length} error${validationErrors.length === 1 ? '' : 's'}`}
@@ -360,6 +406,7 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
       </div>
 
       <ErrorInline error={loadError} />
+      {saveMessage && <p className="ff-muted">{saveMessage}</p>}
 
       {!workflow && !loadError && (
         <div className="ff-card">
@@ -398,6 +445,9 @@ export function WorkflowEditorView({ packages }: { packages: PackageSummary[] })
                 onPatch={patchSelectedNode}
                 onRename={renameSelectedNode}
                 onDelete={() => deleteNode(selectedNode.id)}
+                availableSkills={activePackage?.skills ?? []}
+                agentSkills={selectedAgentSummary?.skills ?? []}
+                onAgentSkillsChange={selectedNode.type === 'agent' ? (skills) => void handleAgentSkillsChange(skills) : undefined}
               />
             ) : (
               <Empty>Select a node to edit its properties, or drag between handles to add an edge.</Empty>

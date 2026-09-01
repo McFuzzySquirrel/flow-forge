@@ -21,11 +21,17 @@ const channels: typeof import('./ipc.js').IpcChannels = {
   installPackage: 'flowforge:install-package',
   installWorkflowArchive: 'flowforge:install-workflow-archive',
   getWorkflow: 'flowforge:get-workflow',
+  saveWorkflow: 'flowforge:save-workflow',
+  updateAgentSkills: 'flowforge:update-agent-skills',
   startRun: 'flowforge:start-run',
   resumeRun: 'flowforge:resume-run',
   listRuns: 'flowforge:list-runs',
   getRun: 'flowforge:get-run',
   getAuditTrail: 'flowforge:get-audit-trail',
+  getModelConfig: 'flowforge:get-model-config',
+  updateModelConfig: 'flowforge:update-model-config',
+  listMessages: 'flowforge:list-messages',
+  sendMessage: 'flowforge:send-message',
   signIn: 'flowforge:sign-in',
   signInWithOidc: 'flowforge:sign-in-with-oidc',
   listIdentityProviders: 'flowforge:list-identity-providers',
@@ -45,6 +51,10 @@ const api = {
     ipcRenderer.invoke(channels.installWorkflowArchive, archivePath),
   getWorkflow: (packageId: string, workflowId: string) =>
     ipcRenderer.invoke(channels.getWorkflow, packageId, workflowId),
+  saveWorkflow: (packageId: string, workflow: import('@flowforge/core').WorkflowDefinition) =>
+    ipcRenderer.invoke(channels.saveWorkflow, packageId, workflow),
+  updateAgentSkills: (packageId: string, agentId: string, skills: string[]) =>
+    ipcRenderer.invoke(channels.updateAgentSkills, packageId, agentId, skills),
   startRun: (packageId: string, workflowId: string) =>
     ipcRenderer.invoke(channels.startRun, packageId, workflowId),
   resumeRun: (runId: string, response: HumanResponse) =>
@@ -52,6 +62,11 @@ const api = {
   listRuns: (packageId?: string) => ipcRenderer.invoke(channels.listRuns, packageId),
   getRun: (runId: string) => ipcRenderer.invoke(channels.getRun, runId),
   getAuditTrail: (runId?: string) => ipcRenderer.invoke(channels.getAuditTrail, runId),
+  getModelConfig: () => ipcRenderer.invoke(channels.getModelConfig),
+  updateModelConfig: (config: import('./ipc.js').ModelConfigSnapshot) =>
+    ipcRenderer.invoke(channels.updateModelConfig, config),
+  listMessages: (filter?: import('./ipc.js').MessageFilter) => ipcRenderer.invoke(channels.listMessages, filter),
+  sendMessage: (message: import('./ipc.js').SendMessageInput) => ipcRenderer.invoke(channels.sendMessage, message),
   signIn: (role: string) => ipcRenderer.invoke(channels.signIn, role),
   signInWithOidc: (providerId: string) => ipcRenderer.invoke(channels.signInWithOidc, providerId),
   listIdentityProviders: () => ipcRenderer.invoke(channels.listIdentityProviders),

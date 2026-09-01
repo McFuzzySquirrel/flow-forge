@@ -67,16 +67,26 @@ export function PropertyPanel({
   workflow,
   onPatch,
   onRename,
-  onDelete
+  onDelete,
+  availableSkills = [],
+  agentSkills = [],
+  onAgentSkillsChange
 }: {
   node: WorkflowNode;
   workflow: WorkflowDefinition;
   onPatch: (patch: Partial<WorkflowNode>) => void;
   onRename: (newId: string) => void;
   onDelete: () => void;
+  availableSkills?: Array<{ id: string; displayName?: string; description: string }>;
+  agentSkills?: string[];
+  onAgentSkillsChange?: (skills: string[]) => void | Promise<void>;
 }) {
   const [idDraft, setIdDraft] = useState(node.id);
   useEffect(() => setIdDraft(node.id), [node.id]);
+
+  const [skillsDraft, setSkillsDraft] = useState<string[]>(agentSkills);
+  useEffect(() => setSkillsDraft(agentSkills), [agentSkills]);
+  const [skillsSaving, setSkillsSaving] = useState(false);
 
   const trimmed = idDraft.trim();
   const idConflict = workflow.nodes.some((candidate) => candidate.id === trimmed && candidate.id !== node.id);
@@ -157,6 +167,36 @@ export function PropertyPanel({
               value={node.retry?.maxAttempts ?? 1}
               onChange={(event) => onPatch({ retry: { maxAttempts: Math.max(1, Number(event.target.value) || 1) } })}
             />
+          </Field>
+          <Field label="skills">
+            <div style={{ display: 'grid', gap: 6 }}>
+              {availableSkills.length === 0 && <span className="ff-muted">No package skills available.</span>}
+              {availableSkills.map((skill) => {
+                const checked = skillsDraft.includes(skill.id);
+                return (
+                  <label key={skill.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={skillsSaving}
+                      onChange={(event) => {
+                        if (!onAgentSkillsChange || skillsSaving) return;
+                        const next = event.target.checked
+                          ? [...skillsDraft, skill.id]
+                          : skillsDraft.filter((current) => current !== skill.id);
+                        setSkillsDraft(next);
+                        setSkillsSaving(true);
+                        void (async () => { try { await onAgentSkillsChange(next); } finally { setSkillsSaving(false); } })();
+                      }}
+                    />
+                    <span>
+                      <strong>{skill.displayName ?? skill.id}</strong>
+                      <div className="ff-muted" style={{ fontSize: 12 }}>{skill.description}</div>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
           </Field>
         </>
       )}

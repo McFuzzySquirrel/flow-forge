@@ -133,8 +133,11 @@ export function AuditView({
                   <th>Action</th>
                   <th>Node</th>
                   <th>Run</th>
+                  <th>Provider</th>
+                  <th>Model</th>
                   <th>Score</th>
                   <th>Persona</th>
+                  <th>Output</th>
                 </tr>
               </thead>
               <tbody>
@@ -149,8 +152,15 @@ export function AuditView({
                     <td className="ff-monospace">
                       {record.workflowRunId ? shortId(record.workflowRunId) : '—'}
                     </td>
+                    <td>{record.model?.provider ?? '—'}</td>
+                    <td>{record.model?.name ?? '—'}</td>
                     <td>{record.score ?? '—'}</td>
                     <td>{record.actor.persona ?? '—'}</td>
+                    <td>
+                      <pre className="ff-pre" style={{ margin: 0, whiteSpace: 'pre-wrap' }}>
+                        {String(record.detail?.outputPreview ?? '—')}
+                      </pre>
+                    </td>
                   </tr>
                 ))}
               </tbody>

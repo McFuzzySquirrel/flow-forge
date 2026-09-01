@@ -30,6 +30,10 @@ protocol and does not define who the user is; OIDC adds the identity layer (ID t
 `userinfo`) that every provider we care about supports. A plain-OAuth2 provider can still be
 fronted by an OIDC broker such as Keycloak.
 
+Implementation note: runtime configuration may accept the string `oauth` as a compatibility alias
+for these discovery-backed OAuth/OIDC providers. That alias does **not** broaden the decision to
+support plain OAuth 2.0 without the OIDC identity layer described here.
+
 We will follow the "everything behind an interface" rule (ADR-0004) and define an
 `IdentityProvider` interface in a new `packages/identity` package. It covers the authorization-code
 flow with PKCE (interactive surfaces), the device-authorization flow (CLI and other headless
