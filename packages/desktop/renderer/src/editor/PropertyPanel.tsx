@@ -186,7 +186,7 @@ export function PropertyPanel({
                           : skillsDraft.filter((current) => current !== skill.id);
                         setSkillsDraft(next);
                         setSkillsSaving(true);
-                        void Promise.resolve(onAgentSkillsChange(next)).finally(() => setSkillsSaving(false));
+                        void (async () => { try { await onAgentSkillsChange(next); } finally { setSkillsSaving(false); } })();
                       }}
                     />
                     <span>
