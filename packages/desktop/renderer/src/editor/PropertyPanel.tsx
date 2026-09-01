@@ -79,13 +79,14 @@ export function PropertyPanel({
   onDelete: () => void;
   availableSkills?: Array<{ id: string; displayName?: string; description: string }>;
   agentSkills?: string[];
-  onAgentSkillsChange?: (skills: string[]) => void;
+  onAgentSkillsChange?: (skills: string[]) => void | Promise<void>;
 }) {
   const [idDraft, setIdDraft] = useState(node.id);
   useEffect(() => setIdDraft(node.id), [node.id]);
 
   const [skillsDraft, setSkillsDraft] = useState<string[]>(agentSkills);
   useEffect(() => setSkillsDraft(agentSkills), [agentSkills]);
+  const [skillsSaving, setSkillsSaving] = useState(false);
 
   const trimmed = idDraft.trim();
   const idConflict = workflow.nodes.some((candidate) => candidate.id === trimmed && candidate.id !== node.id);
@@ -177,13 +178,15 @@ export function PropertyPanel({
                     <input
                       type="checkbox"
                       checked={checked}
+                      disabled={skillsSaving}
                       onChange={(event) => {
-                        if (!onAgentSkillsChange) return;
+                        if (!onAgentSkillsChange || skillsSaving) return;
                         const next = event.target.checked
                           ? [...skillsDraft, skill.id]
                           : skillsDraft.filter((current) => current !== skill.id);
                         setSkillsDraft(next);
-                        onAgentSkillsChange(next);
+                        setSkillsSaving(true);
+                        void Promise.resolve(onAgentSkillsChange(next)).finally(() => setSkillsSaving(false));
                       }}
                     />
                     <span>
