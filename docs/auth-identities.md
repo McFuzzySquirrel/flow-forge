@@ -9,12 +9,13 @@ Identity is configured in a single JSON file. By default the desktop app reads
 `~/.flowforge/identity.json`; you can also point to any path via the
 `FLOWFORGE_IDENTITY_CONFIG` environment variable.
 
-This guide covers four scenarios in order of increasing setup effort:
+This guide covers five scenarios in order of increasing setup effort:
 
 1. [Dev / offline (mock provider)](#1-dev--offline-mock-provider)
 2. [Microsoft Entra ID (Azure AD)](#2-microsoft-entra-id-azure-ad)
 3. [Google Workspace](#3-google-workspace)
 4. [Auth0 and Keycloak](#4-auth0-and-keycloak)
+5. [Personal email accounts (Outlook / Gmail)](#5-personal-email-accounts-outlook--gmail)
 
 ---
 
@@ -340,6 +341,157 @@ Both support standard OIDC discovery and work with the generic
 > `{ "roles": ["teacher", "student"] }`. The `RoleMapper` checks whether the
 > claim value equals the `value` field or whether the value appears in the array,
 > so listing individual role names here works correctly.
+
+---
+
+## 5. Personal email accounts (Outlook / Gmail)
+
+This section covers **consumer** Microsoft accounts (Outlook, Hotmail, Live) and
+**personal** Google accounts (Gmail) — accounts that individuals own, not
+accounts managed by an organisation's Entra ID tenant or Google Workspace
+subscription. Users authenticate with their own username and password through
+Microsoft's or Google's standard login pages; FlowForge never sees or stores any
+credentials.
+
+Because personal accounts belong to no organisation directory, there are no
+groups to query. Roles must be mapped by individual `email` (or `sub`) values.
+This works well for small, known user lists; for larger or unknown lists, front
+these providers with Auth0 or Keycloak (see [Auth0 and Keycloak](#4-auth0-and-keycloak))
+and manage roles there instead.
+
+### Personal Microsoft accounts (Outlook / Hotmail / Live)
+
+#### Register an application
+
+1. In [portal.azure.com](https://portal.azure.com) → **Entra ID** →
+   **App registrations** → **New registration**.
+2. Under **Supported account types**, choose *Personal Microsoft accounts only*
+   (or *Accounts in any organizational directory and personal Microsoft accounts*
+   if you also need Entra ID users from any tenant).
+3. Set the redirect URI to match your deployment surface:
+   - Desktop (Electron): `http://localhost:3478/auth/callback`
+   - Server: `https://<your-host>/auth/callback`
+4. Note the **Application (client) ID**.
+5. Under **Authentication**, enable *Access tokens* and *ID tokens*.
+6. Do **not** create a client secret — FlowForge uses public-client PKCE.
+
+#### Configuration
+
+Use the `consumers` issuer, which is the Microsoft endpoint for personal
+accounts. Replace `<client-id>` with the Application ID from the portal:
+
+```json
+{
+  "providers": [
+    {
+      "id": "microsoft-personal",
+      "type": "oidc",
+      "displayName": "Microsoft (personal)",
+      "issuer": "https://login.microsoftonline.com/consumers/v2.0",
+      "clientId": "<client-id>",
+      "scopes": ["openid", "profile", "email"]
+    }
+  ],
+  "roleMappings": [
+    {
+      "provider": "microsoft-personal",
+      "claim": "email",
+      "value": "alice@outlook.com",
+      "role": "teacher"
+    },
+    {
+      "provider": "microsoft-personal",
+      "claim": "email",
+      "value": "bob@hotmail.com",
+      "role": "student"
+    }
+  ]
+}
+```
+
+> **No `groupsClaim` for personal accounts.** Personal Microsoft accounts are
+> not members of an Entra ID directory, so the `groups` claim is never emitted.
+> Map roles by `email` (or `sub`) as shown above.
+
+> **`consumers` vs `common`.** Using `https://login.microsoftonline.com/consumers/v2.0`
+> restricts sign-in to personal accounts only. If you use `common` instead,
+> both work and personal accounts and Entra ID (work/school) accounts are
+> accepted — in that case add a second role-mapping block scoped to the
+> appropriate provider for each account type.
+
+---
+
+### Personal Google accounts (Gmail)
+
+#### Register an OAuth client
+
+1. In [console.cloud.google.com](https://console.cloud.google.com) →
+   **APIs & Services** → **Credentials** → **Create credentials** → **OAuth
+   client ID**.
+2. Choose *Desktop app* (or *Web application* for a server deployment).
+3. On the **OAuth consent screen**, set *User type* to **External** so that
+   accounts outside your organisation can sign in.
+4. Add the scopes `openid`, `email`, and `profile`.
+5. For a web application add the redirect URI:
+   `http://localhost:3478/auth/callback` (or your production URL).
+6. Note the **Client ID**. No client secret is needed for public clients.
+
+#### Configuration
+
+The issuer is the same as for Google Workspace. The critical difference is that
+personal Gmail accounts do **not** carry an `hd` (hosted domain) claim, so
+map roles by `email` or `sub`:
+
+```json
+{
+  "providers": [
+    {
+      "id": "gmail",
+      "type": "oidc",
+      "displayName": "Google (personal)",
+      "issuer": "https://accounts.google.com",
+      "clientId": "<client-id>.apps.googleusercontent.com",
+      "scopes": ["openid", "profile", "email"]
+    }
+  ],
+  "roleMappings": [
+    {
+      "provider": "gmail",
+      "claim": "email",
+      "value": "alice@gmail.com",
+      "role": "teacher"
+    },
+    {
+      "provider": "gmail",
+      "claim": "email",
+      "value": "bob@gmail.com",
+      "role": "student"
+    }
+  ]
+}
+```
+
+> **No `hd` claim.** Google only includes `hd` in tokens for Workspace
+> (organisational) accounts. Do not use `hd` mappings for personal Gmail —
+> they will never match. Use `email` or the stable `sub` identifier instead.
+
+> **Open enrollment warning.** If you want *any* Google-authenticated user to
+> receive a role, you could add a catch-all mapping using `sub` with a wildcard
+> — but this is not supported by the `RoleMapper` and is intentionally absent.
+> Anyone who authenticates successfully but matches no role mapping will have
+> no roles and will be denied access. This is the safe default. Add each
+> permitted user's `email` explicitly.
+
+---
+
+### Common caveats for personal accounts
+
+| Consideration | Detail |
+|---|---|
+| **No directory / group support** | Personal accounts have no organisation directory. Roles must be listed by `email` or `sub`. This does not scale to large or frequently changing user lists. |
+| **Scale** | For more than a handful of known users, front these providers with Auth0 or Keycloak ([section 4](#4-auth0-and-keycloak)) and manage role assignments there. |
+| **Password management** | Passwords are owned entirely by Microsoft or Google. FlowForge never receives, stores, or resets them. Users click the provider's login button and authenticate on the provider's own page. |
+| **Account verification** | A successful OIDC login only proves the user controls that email address at that provider. It does not verify identity beyond what the provider asserts. |
 
 ---
 
