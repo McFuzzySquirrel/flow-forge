@@ -4,3 +4,5 @@ allowBuilds:
   esbuild: true
   electron: true
   protobufjs: true
+overrides:
+  qs: '>=6.16.0'

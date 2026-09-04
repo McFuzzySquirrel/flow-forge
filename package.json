@@ -16,12 +16,12 @@
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@eslint/js": "^9.0.0",
+    "@eslint/js": "^9.39.5",
     "@flowforge/cli": "workspace:*",
     "@types/node": "^22.20.1",
-    "eslint": "^9.0.0",
-    "typescript": "^5.5.0",
-    "typescript-eslint": "^8.0.0",
-    "vitest": "^3.2.6"
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "^3.2.7"
   }
 }

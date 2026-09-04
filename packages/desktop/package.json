@@ -19,17 +19,17 @@
     "@flowforge/memory": "workspace:*",
     "@flowforge/packages": "workspace:*",
     "@flowforge/workflow": "workspace:*",
-    "@xyflow/react": "^12.11.3"
+    "@xyflow/react": "^12.11.6"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/node": "^22.20.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.7.0",
-    "electron": "^41.0.0",
+    "electron": "^41.10.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "typescript": "^5.5.0",
-    "vite": "^7.3.5"
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6"
   }
 }

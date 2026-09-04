@@ -18,12 +18,12 @@
     "@flowforge/identity": "workspace:*",
     "@flowforge/kernel": "workspace:*",
     "@flowforge/memory": "workspace:*",
-    "@flowforge/packaging": "workspace:*",
     "@flowforge/packages": "workspace:*",
+    "@flowforge/packaging": "workspace:*",
     "@flowforge/workflow": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "typescript": "^5.5.0"
+    "@types/node": "^22.20.1",
+    "typescript": "^5.9.3"
   }
 }
