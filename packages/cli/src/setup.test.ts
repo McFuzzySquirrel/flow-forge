@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -52,10 +52,15 @@ describe('doctor checks', () => {
   });
 
   it('returns a full report from doctorChecks', async () => {
-    const checks = await doctorChecks({ cwd: process.cwd() });
-    const names = checks.map((c) => c.name);
-    expect(names).toEqual(['node', 'pnpm', 'dependencies', 'build', 'ollama', 'docker']);
-    for (const check of checks) expect(['ok', 'warn', 'fail']).toContain(check.status);
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>().mockRejectedValue(new Error('offline')));
+    try {
+      const checks = await doctorChecks({ cwd: process.cwd() });
+      const names = checks.map((c) => c.name);
+      expect(names).toEqual(['node', 'pnpm', 'dependencies', 'build', 'ollama', 'docker']);
+      for (const check of checks) expect(['ok', 'warn', 'fail']).toContain(check.status);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
 
