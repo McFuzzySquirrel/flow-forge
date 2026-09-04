@@ -1,5 +1,8 @@
 # ADR-0011: Terminal-first development; UI layer deferred to Phase 5
 
+> Historical context: this accepted decision governed the pre-Phase-5 build order. Phase 5 is now
+> complete for the Electron desktop client; mobile remains optional and is not currently shipped.
+
 **Date:** 2026-07-15
 **Status:** Accepted
 **Supersedes:** the Phase 2 "Vertical Slice UI" framing in `docs/PLAN.md`
@@ -84,14 +87,14 @@ Concretely:
 - The `KernelApi` interface is the living specification for what any UI must be able to do; it
   evolves through Phase 3–4 before UI work starts.
 
-**Negative / trade-offs:**
-- No demo-friendly GUI until Phase 5. The existing Phase 2.1 Electron shell (package load +
-  run + audit) remains runnable as a demo but will not be extended.
+**Negative / trade-offs at the time of the decision:**
+- No demo-friendly GUI until Phase 5. This trade-off was resolved when the Phase 5 desktop client
+  shipped with package management, portals, audit, governance, identity, and workflow editing.
 - Some UI requirements surface only when building real UIs (pagination, optimistic updates,
   event granularity). The event-subscription API (a future `KernelApi` extension) should be
   designed with a UI consumer in mind, even while the CLI is its first client.
-- The `packages/desktop` package carries a dependency on `@flowforge/kernel` and will build but
-  sit idle. This is acceptable overhead.
+- The `packages/desktop` package carried a dependency on `@flowforge/kernel` and remained buildable
+  while UI work was deferred. It is now the primary Electron client.
 
 ---
 
@@ -100,4 +103,4 @@ Concretely:
 - [ADR-0004](0004-everything-behind-an-interface.md) — swappable interfaces: this ADR is the
   logical extension of "everything behind an interface" to the kernel itself.
 - [ADR-0010](0010-oidc-identity-and-role-based-authorization.md) — identity: the terminal-first
-  approach relies on OIDC device flow; PKCE for desktop deferred to Phase 5.
+  approach relied on OIDC device flow; desktop PKCE was completed in Phase 5.

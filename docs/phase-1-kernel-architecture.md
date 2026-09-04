@@ -1,12 +1,13 @@
 # Phase 1 Kernel Architecture
 
-This branch is the **Phase 1 / Kernel** cut of FlowForge: the headless platform is in place, the
-reference workforce package runs end-to-end, and the next architectural step is to harden the
-kernel's headless contract before richer UI work resumes in Phase 5 (ADR-0011).
+This document records the **Phase 1 / Kernel** cut of FlowForge. The headless platform was in place
+at that milestone, the reference workforce package ran end-to-end, and the next architectural step
+was to harden the kernel's headless contract before richer UI work resumed in Phase 5 (ADR-0011).
+For the current product status, see [PLAN.md](PLAN.md) and the [user guide](user-guide.md).
 
 ## What running this branch looks like
 
-Today the runnable experience is entirely CLI-driven:
+At the Phase 1 milestone, the runnable experience was entirely CLI-driven:
 
 1. **Validate a workforce package** with the existing schemas and cross-reference checks.
 2. **Inspect a workforce package** to see its agents, skills, personas and workflows.
@@ -21,10 +22,10 @@ With the reference package (`fixtures/Grade7-Maths.workforce`), the flow is:
 - a teacher approves or rejects the mark
 - the run completes with an audit trail
 
-The current branch is therefore best understood as a **working kernel and proof harness**, not yet a
-desktop product.
+That milestone was therefore best understood as a **working kernel and proof harness**, not yet a
+desktop product. The current repository now also contains the completed Phase 5 Electron client.
 
-## What this branch proves before Phase 2
+## What this phase proved before Phase 2
 
 Before moving on to the vertical-slice UI, this branch already proves the critical architectural
 claims:
@@ -99,7 +100,7 @@ The main runtime path on this branch is:
    action (role check + per-run participant binding) and continues from persisted state.
 8. Completion or failure is reflected in the final run status and the audit chain.
 
-## Evidence available on this branch
+## Evidence available for this phase
 
 The branch already has executable proof points:
 

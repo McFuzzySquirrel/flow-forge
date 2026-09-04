@@ -1,8 +1,8 @@
 # Phase 5 UI Architecture
 
-Phase 5 is the **UI layer(s)** cut of FlowForge. Per ADR-0011, this is the point where richer
-interfaces are allowed to advance again — but only as thin adapters over the kernel contract proven
-through Phases 1–4.
+Phase 5 is the **UI layer(s)** cut of FlowForge. It is complete for the Electron desktop surface,
+with mobile explicitly not pursued. Per ADR-0011, the desktop is a thin adapter over the kernel
+contract proven through Phases 1–4.
 
 ## What this phase is for
 
@@ -10,11 +10,12 @@ Phase 5 turns the proven kernel into user-facing application surfaces:
 
 1. **Electron UI completion** for package installation, run management, audit viewing and identity.
 2. **A visual workflow editor** built on kernel validation rather than duplicating workflow rules.
-3. **Optional mobile surfaces** that consume the same kernel contract through a different transport.
+3. **A future mobile transport** remains an optional extension of the same kernel contract; no mobile
+   client is currently shipped.
 
-## What this phase must prove
+## What this phase proves
 
-Phase 5 is intended to prove:
+Phase 5 proves:
 
 1. **The UI contains no business logic.** Every meaningful user action is reproducible via the CLI
    against the same `KernelApi`.
@@ -38,8 +39,8 @@ Phase 5 is intended to prove:
 
 - Package installation, workforce home, learner/teacher portals, audit viewing and admin governance
   are rendered from kernel snapshots.
-- OIDC authorization-code + PKCE for interactive surfaces lands here, completing the deferred part
-  of ADR-0010.
+- OIDC authorization-code + PKCE for interactive desktop surfaces is implemented here, completing
+  the deferred desktop portion of ADR-0010.
 
 ### Workflow-authoring layer
 
@@ -50,7 +51,7 @@ Phase 5 therefore consumes prior architectural work rather than replacing it.
 
 ## Detailed companion doc
 
-For the currently parked Electron shell, its IPC layering, the planned page set, and the detailed
+For the current Electron client, its IPC layering, implemented page set, and the detailed
 LLM integration explanation, see [Pages architecture & LLM integration](pages-architecture.md).
 
 ## Constraints within this phase

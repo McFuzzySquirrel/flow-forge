@@ -112,6 +112,48 @@ describe('IdentityRegistry', () => {
 });
 
 describe('IdentityService', () => {
+  it('supports separate Outlook and Gmail providers with email-based roles', async () => {
+    const audit = new AuditLog();
+    const identityConfig: IdentityConfig = {
+      providers: [
+        { id: 'microsoft-personal', type: 'mock', displayName: 'Microsoft personal' },
+        { id: 'gmail', type: 'mock', displayName: 'Google personal' }
+      ],
+      roleMappings: [
+        { provider: 'microsoft-personal', claim: 'email', value: 'teacher@outlook.com', role: 'teacher' },
+        { provider: 'gmail', claim: 'email', value: 'student@gmail.com', role: 'student' }
+      ]
+    };
+    const service = IdentityService.fromConfig(identityConfig, audit);
+    (service.registry.get('microsoft-personal') as MockIdentityProvider).addUser('outlook-token', {
+      sub: 'outlook-user',
+      email: 'teacher@outlook.com',
+      name: 'Outlook Teacher'
+    });
+    (service.registry.get('gmail') as MockIdentityProvider).addUser('gmail-token', {
+      sub: 'gmail-user',
+      email: 'student@gmail.com',
+      name: 'Gmail Student'
+    });
+
+    const outlook = await service.login('microsoft-personal', { accessToken: 'outlook-token' });
+    const gmail = await service.login('gmail', { accessToken: 'gmail-token' });
+
+    expect(outlook.principal).toMatchObject({
+      id: 'outlook-user',
+      email: 'teacher@outlook.com',
+      provider: 'microsoft-personal',
+      roles: ['teacher']
+    });
+    expect(gmail.principal).toMatchObject({
+      id: 'gmail-user',
+      email: 'student@gmail.com',
+      provider: 'gmail',
+      roles: ['student']
+    });
+    expect(audit.verify()).toBe(-1);
+  });
+
   it('logs a user in, mapping claims to roles, and audits the event', async () => {
     const { service, audit } = makeService();
     const session = await service.login('school', { accessToken: 'token-teacher' });

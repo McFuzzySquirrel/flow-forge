@@ -65,35 +65,41 @@ consumer (CLI, Electron, future mobile/web) depends on:
 | `listRuns(packageId?)` | List persisted runs |
 | `getRun(id)` | Get a single run by id |
 | `getAuditTrail(filter?)` | Fetch audit records with optional filters |
-| `signIn(role)` | Sign in via dev identity (OIDC deferred to Phase 5) |
+| `signIn(role)` | Sign in via the development identity provider |
 | `signOut()` | Sign out the current user |
 | `getCurrentUser()` | Return the signed-in user snapshot |
+| `beginOidcLogin(providerId, redirectUri)` | Start authorization-code + PKCE login |
+| `completeOidcLogin(providerId, code, verifier, redirectUri)` | Exchange the authorization code in the main process |
+| `listIdentityProviders()` | List configured identity providers |
+| `getGovernance()` | Return role mappings, permissions, session policy, and user audit summaries |
+| `getModelConfig()` / `updateModelConfig()` | Read or update provider routing and model settings |
+| `getWorkflow()` / `saveWorkflow()` | Read or persist a validated workflow definition |
+| `updateAgentSkills()` | Persist an agent's package-defined skill assignments |
 
 ---
 
-## 2. Current pages (Milestone 2.1 shell)
+## 2. Current pages (Phase 5 desktop client)
 
-The current desktop UI is a **single React component** (`App.tsx`) that acts as a vertical-slice
-proof of the IPC bridge. It is intentionally minimal — no routing, no dedicated page components —
-and is parked at this state until Phase 5 (see ADR-0011 and `docs/PLAN.md`).
+The current desktop UI is a React client composed of dedicated views under
+`packages/desktop/renderer/src`. `App.tsx` owns view selection and shared package/user state;
+business logic remains in the main-process kernel adapter.
 
-The component is divided into four sections that map directly onto the KernelApi surface:
+The client is divided into views that map directly onto the KernelApi surface:
 
-### Section 1 — Workforce Package
+### View 1 — Workforce home
 
 **Purpose:** load and inspect a `.workforce` package from the local filesystem.
 
 **Interactions:**
-- User types a directory path and clicks **Validate & load**.
-- Calls `window.flowforge.validatePackage(dir)` then `window.flowforge.loadPackage(dir)`.
-- On success: displays the package name, version, description, agent roster (name, role, model
-  tier, skills), and a list of workflows with **Start run** buttons.
-- On failure: schema validation errors are surfaced inline.
+- User browses for a `.workforce` directory or archive, or enters a path manually.
+- Calls the validation and install methods exposed by the allow-listed API.
+- Displays package branding, version, signing status, agent roster, skills, and workflows.
+- Validation and install errors are surfaced inline.
 
 **Data rendered:** `PackageSummary` → `AgentSummary[]`, `WorkflowSummary[]`. Nothing on screen is
 hardcoded; swapping the package changes every label (design rule 3).
 
-### Section 2 — Identity
+### View 2 — Identity
 
 **Purpose:** authenticate as one of the package's workflow roles.
 
@@ -101,14 +107,14 @@ hardcoded; swapping the package changes every label (design rule 3).
 - Before a package is loaded: no role buttons are shown.
 - After a package is loaded: one **Sign in as `<role>`** button per unique role extracted from
   workflow nodes (via `WorkflowSummary.roles`).
-- Calls `window.flowforge.signIn(role)`, which uses the dev identity provider (one mock user per
-  role). OIDC authorization-code + PKCE is deferred to Phase 5.
+- Calls `window.flowforge.signIn(role)` for development identity, or begins the configured OIDC
+  authorization-code + PKCE flow. The browser redirect is handled by the trusted main process.
 - Shows the signed-in user's display name, roles, and provider; **Sign out** calls
   `window.flowforge.signOut()`.
 
 **Data rendered:** `UserSnapshot` — never contains tokens or raw claims.
 
-### Section 3 — Run
+### View 3 — Runs and role portals
 
 **Purpose:** start and advance a workflow run, including human-input and human-approval steps.
 
@@ -126,7 +132,7 @@ hardcoded; swapping the package changes every label (design rule 3).
 **Data rendered:** `RunSnapshot` — `status`, `currentNodeId`, `pending` (with `kind`, `role`,
 `prompt`, `subject`).
 
-### Section 4 — Audit trail
+### View 4 — Audit trail
 
 **Purpose:** show the immutable audit log for the current run.
 
@@ -139,10 +145,26 @@ hardcoded; swapping the package changes every label (design rule 3).
 
 ---
 
-## 3. Planned pages (Phase 5)
+### View 5 — Governance
 
-Phase 5 replaces the single-component shell with a full set of dedicated pages. All of them are
-thin rendering surfaces over the frozen `KernelApi` — no business logic lives in the renderer.
+**Purpose:** expose deployment identity and model-routing state without moving secrets into the
+renderer.
+
+**Data rendered:** configured identity providers, role mappings, permissions, session policy, model
+configuration and warnings, plus per-user audit summaries.
+
+### View 6 — Workflow editor
+
+**Purpose:** author and test package workflows without duplicating kernel validation.
+
+**Interactions:** render workflow graphs, overlay live run state, edit node properties and edges,
+update referenced agent skills, run continuous validation, save valid workflow JSON, and perform an
+in-editor dry run with the mock provider.
+
+## 3. Historical planned page set
+
+Phase 5 replaced the single-component shell with the dedicated views described above. All of them
+are thin rendering surfaces over the `KernelApi` — no business logic lives in the renderer.
 Every user action must be reproducible via the CLI (the Phase 5 exit criterion).
 
 | Page | Role | Key KernelApi calls |
@@ -154,8 +176,8 @@ Every user action must be reproducible via the CLI (the Phase 5 exit criterion).
 | **Learner portal — task inbox** | Learner | `listRuns`, `getRun`, `resumeRun` |
 | **Learner portal — feedback view** | Learner | `getRun`, `getAuditTrail` |
 | **Audit viewer** | Admin/Teacher | `getAuditTrail` (with filters) |
-| **Admin governance** | Admin | `signIn`, `getAuditTrail` |
-| **Visual workflow editor** | Package author | `validatePackage` |
+| **Admin governance** | Admin | `getGovernance`, `getModelConfig`, `updateModelConfig` |
+| **Visual workflow editor** | Package author | `getWorkflow`, `saveWorkflow`, `updateAgentSkills`, `validatePackage` |
 
 See `docs/PLAN.md` (Milestone 5.1) for the full task breakdown and "done when" criteria.
 
@@ -258,7 +280,7 @@ Model responses are expected to be JSON objects (the agent's system prompt instr
 runtime tries to parse the raw completion as JSON — stripping any markdown code-fence wrapper —
 and falls back to treating the response as a plain string if parsing fails.
 
-Well-known fields on the parsed object (`score`, `confidence`, `rubricSection`) are extracted and
+Well-known fields on the parsed object (`score`, `confidence`, `section`) are extracted and
 forwarded to the audit record. Any additional fields are passed as-is to the workflow's state bag
 for downstream nodes to consume.
 
@@ -275,7 +297,7 @@ contains:
 | `promptVersion` | SHA-256 (first 12 hex chars) of the assembled system prompt |
 | `model` | `{ provider: providerName, name: completionModel }` |
 | `evidence` | Memory items recalled, each with source path, excerpt, and relevance score |
-| `score`, `confidence`, `rubricSection` | Extracted from the model's JSON output where present |
+| `score`, `confidence`, `section` | Extracted from the model's JSON output where present |
 | `workflowRunId`, `nodeId` | Links the record to the exact workflow node that triggered it |
 
 This audit trail means any mark, recommendation or output can be explained after the fact: which

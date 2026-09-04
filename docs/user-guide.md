@@ -153,6 +153,21 @@ your desktop runs use the same Ollama/cloud routing as the CLI.
 `flowforge doctor` prints a read-only health checklist (Node, pnpm, build,
 Ollama, Docker) and exits non-zero if something required is missing.
 
+### Using DeepSeek
+
+FlowForge supports DeepSeek through its native OpenAI-compatible provider. Keep the API key in the
+environment or the git-ignored `.env` file rather than in `flowforge.config.json`:
+
+```bash
+export DEEPSEEK_API_KEY="your-deepseek-api-key"
+flowforge setup --non-interactive --provider deepseek --skip-validation
+flowforge run fixtures/Grade7-Maths.workforce assignment
+```
+
+The default DeepSeek endpoint is `https://api.deepseek.com` and the default model is
+`deepseek-chat`. The setup wizard can also write the key to the local `.env` file when run
+interactively.
+
 ---
 
 ## The desktop app

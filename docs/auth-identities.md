@@ -9,6 +9,11 @@ Identity is configured in a single JSON file. By default the desktop app reads
 `~/.flowforge/identity.json`; you can also point to any path via the
 `FLOWFORGE_IDENTITY_CONFIG` environment variable.
 
+The desktop app uses a dynamically allocated loopback callback such as
+`http://127.0.0.1:<port>/callback`. Do not register a fixed port such as `3478`; configure your
+provider to allow loopback redirect URIs according to its client-registration rules. The app opens
+the browser and keeps authorization codes and tokens in the trusted Electron main process.
+
 This guide covers five scenarios in order of increasing setup effort:
 
 1. [Dev / offline (mock provider)](#1-dev--offline-mock-provider)
@@ -16,6 +21,48 @@ This guide covers five scenarios in order of increasing setup effort:
 3. [Google Workspace](#3-google-workspace)
 4. [Auth0 and Keycloak](#4-auth0-and-keycloak)
 5. [Personal email accounts (Outlook / Gmail)](#5-personal-email-accounts-outlook--gmail)
+
+To test both personal identities in one deployment, configure two OIDC providers and map each
+email address to the role needed by the workflow. The desktop app can list both providers and start
+the selected authorization-code + PKCE flow. The CLI device-flow path uses the first configured
+provider in the identity file, so use a separate identity file per provider when testing the CLI.
+
+```json
+{
+  "providers": [
+    {
+      "id": "microsoft-personal",
+      "type": "oidc",
+      "displayName": "Microsoft personal",
+      "issuer": "https://login.microsoftonline.com/consumers/v2.0",
+      "clientId": "<microsoft-client-id>",
+      "scopes": ["openid", "profile", "email"]
+    },
+    {
+      "id": "gmail",
+      "type": "oidc",
+      "displayName": "Google personal",
+      "issuer": "https://accounts.google.com",
+      "clientId": "<google-client-id>",
+      "scopes": ["openid", "profile", "email"]
+    }
+  ],
+  "roleMappings": [
+    {
+      "provider": "microsoft-personal",
+      "claim": "email",
+      "value": "teacher@outlook.com",
+      "role": "teacher"
+    },
+    {
+      "provider": "gmail",
+      "claim": "email",
+      "value": "student@gmail.com",
+      "role": "student"
+    }
+  ]
+}
+```
 
 ---
 
@@ -112,7 +159,7 @@ when a mock provider is present — no credentials needed.
    **App registrations** → **New registration**.
 2. Give the app a name (e.g. *FlowForge*) and set the redirect URI to match your
    deployment surface:
-   - Desktop (Electron): `http://localhost:3478/auth/callback`
+   - Desktop (Electron): dynamic loopback callback, for example `http://127.0.0.1:<port>/callback`
    - Server: `https://<your-host>/auth/callback`
 3. Note the **Application (client) ID** and **Directory (tenant) ID**.
 4. Under **Authentication**, enable *Access tokens* and *ID tokens*.
@@ -164,15 +211,17 @@ Replace `<tenant-id>` and `<client-id>` with the values from the portal:
 ### CLI device-code login
 
 The CLI uses the device-authorization flow (RFC 8628). Entra ID supports this
-natively. Run:
+natively. Run a workflow with an identity configuration:
 
 ```bash
-flowforge login --provider entra
+flowforge run fixtures/Grade7-Maths.workforce assignment \
+  --identity ~/.flowforge/identity.json
 ```
 
-You will be shown a short code and a URL (`microsoft.com/devicelogin`). Enter
-the code in a browser, sign in with your Microsoft account, and the CLI receives
-a token automatically.
+When a human step is reached, you will be shown a short code and a URL
+(`microsoft.com/devicelogin`). Enter the code in a browser, sign in with your Microsoft account,
+and the CLI receives a token automatically. The provider used is the first configured provider in
+the identity file.
 
 ---
 
@@ -185,7 +234,7 @@ a token automatically.
    client ID**.
 2. Choose *Desktop app* (or *Web application* if deploying a server).
 3. For a web application add the redirect URI:
-   `http://localhost:3478/auth/callback` (or your production URL).
+   the dynamic loopback callback shown by the desktop app (or your production URL).
 4. Note the **Client ID**. No client secret is needed for public clients.
 5. Under **OAuth consent screen**, add the scopes `openid`, `email`, and
    `profile`.
@@ -254,7 +303,7 @@ Both support standard OIDC discovery and work with the generic
 1. In [manage.auth0.com](https://manage.auth0.com) → **Applications** → **Create
    Application** → *Regular Web Application* (for server) or *Native* (for
    desktop/CLI).
-2. Add the allowed callback URL: `http://localhost:3478/auth/callback`.
+2. Allow the dynamic loopback callback used by the desktop app, for example `http://127.0.0.1:<port>/callback`.
 3. Enable **Refresh Token Rotation** in the application settings.
 4. To emit roles as a token claim, create an **Action** in the Auth0 pipeline
    that writes user roles into a custom namespace claim:
@@ -302,7 +351,7 @@ Both support standard OIDC discovery and work with the generic
 
 1. In your Keycloak realm → **Clients** → **Create client**.
 2. Set **Client authentication** to *Off* (public client, PKCE).
-3. Add the redirect URI: `http://localhost:3478/auth/callback`.
+3. Allow the dynamic loopback callback used by the desktop app, for example `http://127.0.0.1:<port>/callback`.
 4. Create **Realm roles** (`teacher`, `student`) and assign them to users (or
    map from LDAP groups).
 5. Add a **Client scope** that maps realm roles into the `realm_access.roles`
@@ -369,7 +418,7 @@ and manage roles there instead.
    (or *Accounts in any organizational directory and personal Microsoft accounts*
    if you also need Entra ID users from any tenant).
 3. Set the redirect URI to match your deployment surface:
-   - Desktop (Electron): `http://localhost:3478/auth/callback`
+   - Desktop (Electron): dynamic loopback callback, for example `http://127.0.0.1:<port>/callback`
    - Server: `https://<your-host>/auth/callback`
 4. Note the **Application (client) ID**.
 5. Under **Authentication**, enable *Access tokens* and *ID tokens*.
@@ -433,7 +482,7 @@ accounts. Replace `<client-id>` with the Application ID from the portal:
    accounts outside your organisation can sign in.
 4. Add the scopes `openid`, `email`, and `profile`.
 5. For a web application add the redirect URI:
-   `http://localhost:3478/auth/callback` (or your production URL).
+   the dynamic loopback callback shown by the desktop app (or your production URL).
 6. Note the **Client ID**. No client secret is needed for public clients.
 
 #### Configuration

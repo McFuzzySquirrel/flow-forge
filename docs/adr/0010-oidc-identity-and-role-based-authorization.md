@@ -70,6 +70,10 @@ carry the verified provider and roles at the time of action.
 
 ## Consequences
 
+The implementation now includes desktop authorization-code + PKCE login and the Phase 5 governance
+view. The remaining follow-up in this ADR is persistent, shared session storage for deployments
+that need cross-process or multi-node revocation; the default session store remains in memory.
+
 Easier: any OIDC-compliant IdP works out of the box; tests run offline against the mock provider;
 approvals and submissions are attributable to verified identities; the audit trail answers "who did
 what, as which role, asserted by which provider"; packages remain portable because role mapping is
@@ -81,6 +85,4 @@ accepted now, while the surface area is small). Plain-OAuth2-only providers requ
 Session revocation and multi-node session sharing need a persistent `SessionStore` implementation
 later.
 
-Follow-up work: persistent session store, admin UI for role-mapping management, token-lifetime
-policy enforcement beyond expiry, and wiring the desktop/server surfaces to the auth-code + PKCE
-flow.
+Follow-up work: persistent session store and token-lifetime policy enforcement beyond expiry.

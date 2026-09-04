@@ -1,9 +1,9 @@
 # Phase 4 Ecosystem Architecture
 
-Phase 4 is the **ecosystem** cut of FlowForge. This phase is not yet fully landed, but its
-architecture is already defined by the roadmap and ADR set: workforce packages become signed,
+Phase 4 is the **ecosystem** cut of FlowForge. It is complete: workforce packages are signed,
 portable artefacts; the platform is proven against a second domain; and the workflow engine is
-validated against a second runner.
+validated against a second runner. This document records the architecture and evidence for that
+completed phase.
 
 ## What this phase is for
 
@@ -13,18 +13,18 @@ Phase 4 turns FlowForge from a convincing kernel into a portable platform:
 2. **A second domain package** proves the platform contract is genuinely domain-neutral.
 3. **A Dapr-based runner** proves the workflow DSL is portable across execution substrates.
 
-## What this phase proves before Phase 5
+## What this phase proves for Phase 5
 
-Phase 4 is intended to prove:
+Phase 4 proves:
 
 1. **Workforce packages are supply-chain artefacts, not just folders.** Deterministic archives,
    manifests and signatures make integrity and authorship testable.
-2. **The package model survives a second implementation.** A Corporate-Onboarding package should run
+2. **The package model survives a second implementation.** A Corporate-Onboarding package runs
    without education-specific logic leaking into platform code.
-3. **The workflow DSL is runner-neutral.** The embedded engine and a Dapr runner should produce the
+3. **The workflow DSL is runner-neutral.** The embedded engine and a Dapr runner produce the
    same observable workflow behaviour and audit semantics.
-4. **The kernel contract is stable enough for UI investment.** Once two packages and two runners are
-   proven, Phase 5 can focus on interaction design instead of re-opening core abstractions.
+4. **The kernel contract is stable enough for UI clients.** The two packages and two runners provide
+   the stable contract consumed by the completed Phase 5 desktop client.
 
 ## Architecture at this phase
 
@@ -53,7 +53,7 @@ force platform changes.
 
 This is the point where "everything behind an interface" reaches the runtime substrate itself.
 
-## Evidence expected in this phase
+## Evidence delivered in this phase
 
 The roadmap defines the proof points Phase 4 should produce:
 
@@ -69,7 +69,7 @@ The roadmap defines the proof points Phase 4 should produce:
 - [ADR-0003: All domain behaviour ships in installable workforce packages](adr/0003-workforce-packages.md)
 - [ADR-0004: Swappable interfaces for model, memory, state and audit services](adr/0004-everything-behind-an-interface.md)
 
-## Constraints that should carry into Phase 5
+## Constraints carried into Phase 5 and beyond
 
 Phase 5 should preserve these properties:
 

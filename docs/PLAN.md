@@ -46,7 +46,7 @@ companion.
 feature from the original Phase 2 UI that is actually a kernel concern lands here, exercised
 through the CLI and its test suite. The Electron shell stays buildable but receives no new screens.
 
-### Milestone 2.1 — Application shell & IPC bridge ✔ (landed; parked)
+### Milestone 2.1 — Application shell & IPC bridge ✔ (landed; foundation for Phase 5)
 
 | # | Task | Done when |
 | --- | --- | --- |
@@ -55,7 +55,7 @@ through the CLI and its test suite. The Electron shell stays buildable but recei
 | 2.1.3 | Wire the kernel into the main process: expose `validatePackage`, `loadPackage`, `startRun`, `resumeRun`, `getRun`, `getAuditTrail` over IPC | Renderer can list a loaded package's agents/workflows ✔ |
 | 2.1.4 | Add a `contextBridge` preload with a minimal, allow-listed API surface (no `nodeIntegration`) | Security checklist passes: renderer has no direct Node access ✔ |
 | 2.1.5 | Add desktop package to root `pnpm build` / `pnpm lint` / CI | Fresh clone builds everything with one command ✔ |
-| 2.1.6 | Identity (I.6, dev-identity slice): `signIn`, `signOut`, `getCurrentUser` over IPC using dev identity | Dev-identity slice shipped ✔; OIDC authorization-code + PKCE deferred to Phase 5 (ADR-0011) |
+| 2.1.6 | Identity (I.6, dev-identity slice): `signIn`, `signOut`, `getCurrentUser` over IPC using dev identity | Dev-identity slice shipped ✔; desktop OIDC authorization-code + PKCE completed in Phase 5 |
 
 ### Milestone 2.2 — Formal `KernelApi` & persistence
 
@@ -244,7 +244,7 @@ expression of each feature ships in Phase 5.
   "replace one agent, keep others' memory" property only holds because memory is owned per
   namespace, not per workflow — this is the state-vs-memory distinction from the README made real.
 
-### Milestone 3.4 — Graph-level workflow validation *(visual editor deferred to Phase 5)*
+### Milestone 3.4 — Graph-level workflow validation *(visual editor completed in Phase 5)*
 
 The graph-level validation logic is needed by any future editor, so it belongs in the kernel now.
 The visual editor itself ships in Phase 5.
@@ -459,9 +459,9 @@ Follow-up work (slotted into the phases above):
 
 | # | Task | Done when |
 | --- | --- | --- |
-| I.6 | Desktop app login via authorization-code + PKCE (Phase 5, Task 5.1.7) | UI shows the signed-in user; every human step passes the Principal |
+| I.6 | Desktop app login via authorization-code + PKCE (Phase 5, Task 5.1.7) | UI shows the signed-in user; every human step passes the Principal ✔ |
 | I.7 | Persistent `SessionStore` (Phase 2: `FileAuditSink` + kernel dataDir shipped; full cross-process session persistence follows Phase 3 VectorStore work) | Sessions survive restart; revocation works across nodes |
-| I.8 | Admin governance UI — role-mapping management, session policy, per-user audit trail (Phase 5, Task 5.1.8) | Admin can review who did what, as which role, asserted by which provider |
+| I.8 | Admin governance UI — role-mapping management, session policy, per-user audit trail (Phase 5, Task 5.1.8) | Admin can review who did what, as which role, asserted by which provider ✔ |
 
 ---
 
